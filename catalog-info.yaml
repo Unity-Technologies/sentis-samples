@@ -1,0 +1,20 @@
+# For more information about the available options please visit: http://go/backstage (VPN required)
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  annotations:
+    github.com/project-slug: Unity-Technologies/sentis-samples
+  name: sentis-samples
+  description: "Sentis samples internal development repository. Contains example and template project for Sentis package use."
+  labels:
+    costcenter: "5084"
+  tags:
+    - planned-public
+  links:
+    - url: https://unity.slack.com/messages/CAFUH1CQN/
+      title: "#devs-sentis"
+      icon: chat
+spec:
+  type: other
+  lifecycle: production
+  owner: unity-technologies/ucs-sentis-cloud
