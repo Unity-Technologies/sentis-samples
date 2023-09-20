@@ -7,7 +7,7 @@ metadata:
   name: sentis-samples
   description: "Sentis samples internal development repository. Contains example and template project for Sentis package use."
   labels:
-    costcenter: "5084"
+    costcenter: "5010"
   tags:
     - planned-public
   links:
@@ -17,4 +17,4 @@ metadata:
 spec:
   type: other
   lifecycle: production
-  owner: unity-technologies/ucs-sentis-cloud
+  owner: unity-technologies/labs
