@@ -4,7 +4,7 @@ Sentis samples internal development repository. Contains example and template pr
 [Digit detection 1](https://www.youtube.com/watch?v=IofX0CAYdmU) <br/>
 [Digit detection 2](https://www.youtube.com/watch?v=SrzjhxQSnW4) <br/>
 [Style transfer](https://www.youtube.com/watch?v=dSzbDRQsNsg) <br/>
-[Object detction and style transfer](https://www.youtube.com/watch?v=_J-Ll2SfOoY) <br/>
+[Object detection and style transfer](https://www.youtube.com/watch?v=_J-Ll2SfOoY) <br/>
 
 
 # Delete after converting to public repository
