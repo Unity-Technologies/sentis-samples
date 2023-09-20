@@ -1,8 +1,7 @@
 # Sentis-samples
 Sentis samples internal development repository. Contains example and template projects for Sentis package use.
 ## Videos
-[Digit detection 1](https://www.youtube.com/watch?v=IofX0CAYdmU) <br/>
-[Digit detection 2](https://www.youtube.com/watch?v=SrzjhxQSnW4) <br/>
+[Digit detection](https://www.youtube.com/watch?v=IofX0CAYdmU) <br/>
 [Style transfer](https://www.youtube.com/watch?v=dSzbDRQsNsg) <br/>
 [Object detection and style transfer](https://www.youtube.com/watch?v=_J-Ll2SfOoY) <br/>
 
