@@ -1,0 +1,13 @@
+{
+    "name": "Unity.Sentis.MacBLAS",
+    "references": [
+		"Unity.Sentis"
+    ],
+    "optionalUnityReferences": [],
+    "includePlatforms": [
+        "Editor",
+        "macOSStandalone"
+    ],
+    "excludePlatforms": [],
+    "allowUnsafeCode": true
+}

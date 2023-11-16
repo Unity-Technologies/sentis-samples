@@ -1,0 +1,102 @@
+// This is auto-generated -- do not modify directly
+
+#pragma kernel EinsumOne EINSUMONE
+#pragma kernel EinsumTwo EINSUMTWO
+#include "Tensor.cginc"
+
+int sumLengths[8];
+int sumStrides[8];
+int sumStridesA[8];
+int outLengths[8];
+int outStrides[8];
+int outStridesA[8];
+int sumStridesB[8];
+int outStridesB[8];
+uint2 unrolledDispatchArgs;
+int sumRank;
+int sumSize;
+int outRank;
+StructuredBuffer<float> Xptr;
+StructuredBuffer<float> Bptr;
+RWStructuredBuffer<float> Optr;
+
+
+#ifdef EINSUMONE
+[numthreads(64, 1, 1)]
+void EinsumOne(uint3 dispatchThreadID : SV_DispatchThreadID)
+{
+    uint threadIdx = unrolledDispatchArgs.x * dispatchThreadID.y + dispatchThreadID.x;
+    if(threadIdx >= unrolledDispatchArgs.y)
+        return;
+    {
+        int outIndex = threadIdx;
+
+        int outOffsetA = 0;
+        for (int i = 8 - outRank; i < 8; i++)
+        {
+            int outSubIndex = (outIndex / (uint)outStrides[i]) % (uint)outLengths[i];
+            outOffsetA += outStridesA[i] * outSubIndex;
+        }
+
+        float sum = 0;
+
+        for (int sumIndex = 0; sumIndex < sumSize; sumIndex++)
+        {
+            int sumOffsetA = 0;
+
+            for (int i = 8 - sumRank; i < 8; i++)
+            {
+                int sumSubIndex = (sumIndex / (uint)sumStrides[i]) % (uint)sumLengths[i];
+                sumOffsetA += sumStridesA[i] * sumSubIndex;
+            }
+
+            sum += Xptr[outOffsetA + sumOffsetA];
+        }
+
+        Optr[outIndex] = sum;
+    }
+}
+#endif
+
+
+#ifdef EINSUMTWO
+[numthreads(64, 1, 1)]
+void EinsumTwo(uint3 dispatchThreadID : SV_DispatchThreadID)
+{
+    uint threadIdx = unrolledDispatchArgs.x * dispatchThreadID.y + dispatchThreadID.x;
+    if(threadIdx >= unrolledDispatchArgs.y)
+        return;
+    {
+        int outIndex = threadIdx;
+
+        int outOffsetA = 0;
+        int outOffsetB = 0;
+        for (int i = 8 - outRank; i < 8; i++)
+        {
+            int outSubIndex = (outIndex / (uint)outStrides[i]) % (uint)outLengths[i];
+            outOffsetA += outStridesA[i] * outSubIndex;
+            outOffsetB += outStridesB[i] * outSubIndex;
+        }
+
+        float sum = 0;
+
+        for (int sumIndex = 0; sumIndex < sumSize; sumIndex++)
+        {
+            int sumOffsetA = 0;
+            int sumOffsetB = 0;
+
+            for (int i = 8 - sumRank; i < 8; i++)
+            {
+                int sumSubIndex = (sumIndex / (uint)sumStrides[i]) % (uint)sumLengths[i];
+                sumOffsetA += sumStridesA[i] * sumSubIndex;
+                sumOffsetB += sumStridesB[i] * sumSubIndex;
+            }
+
+            sum += Xptr[outOffsetA + sumOffsetA] * Bptr[outOffsetB + sumOffsetB];
+        }
+
+        Optr[outIndex] = sum;
+    }
+}
+#endif
+

@@ -1,0 +1,72 @@
+#pragma kernel Greater GREATER SUFFIX=Greater
+#pragma kernel GreaterOrEqual GREATER_EQUAL SUFFIX=GreaterOrEqual
+#pragma kernel Less LESS SUFFIX=Less
+#pragma kernel LessOrEqual LESS_EQUAL SUFFIX=LessOrEqual
+#pragma kernel Equal EQUAL SUFFIX=Equal
+#pragma kernel GreaterInt GREATER INT SUFFIX=GreaterInt
+#pragma kernel GreaterOrEqualInt GREATER_EQUAL INT SUFFIX=GreaterOrEqualInt
+#pragma kernel LessInt LESS INT SUFFIX=LessInt
+#pragma kernel LessOrEqualInt LESS_EQUAL INT SUFFIX=LessOrEqualInt
+#pragma kernel EqualInt EQUAL INT SUFFIX=EqualInt
+
+#include "Tensor.cginc"
+
+int shapeO[8];
+int stridesO[8];
+int shapeA[8];
+int stridesA[8];
+int shapeB[8];
+int stridesB[8];
+uint2 unrolledDispatchArgs;
+int rank;
+
+#if defined(INT)
+StructuredBuffer<int> Xptr;
+StructuredBuffer<int> Bptr;
+#else
+StructuredBuffer<float> Xptr;
+StructuredBuffer<float> Bptr;
+#endif
+RWStructuredBuffer<int> Optr;
+
+#define COMPARE_FUNC_NAME_CALL(KERNEL) KERNEL
+#define COMPARE_FUNC_NAME(KERNEL) REDUCE_FUNC_NAME_CALL(KERNEL)
+
+#if defined(INT)
+inline int CompareOp(int x, int y)
+#else
+inline float CompareOp(float x, float y)
+#endif
+{
+#if defined(GREATER)
+    return x > y;
+#elif defined(GREATER_EQUAL)
+    return x >= y;
+#elif defined(LESS)
+    return x < y;
+#elif defined(LESS_EQUAL)
+    return x <= y;
+#elif defined(EQUAL)
+    return x == y;
+#else
+    return 0;
+#endif
+}
+
+[numthreads(64, 1, 1)]
+void SUFFIX(uint3 dispatchThreadID : SV_DispatchThreadID)
+{
+    uint threadIdx = unrolledDispatchArgs.x * dispatchThreadID.y + dispatchThreadID.x;
+    if (threadIdx >= unrolledDispatchArgs.y)
+        return;
+
+    int indexA = 0; int indexB = 0;
+    for (int axis = 0; axis < rank; axis++)
+    {
+        indexA += (((threadIdx / stridesO[(SHAPE_MAXRANK - 1) - axis]) % shapeO[(SHAPE_MAXRANK - 1) - axis]) % shapeA[(SHAPE_MAXRANK - 1) - axis]) * stridesA[(SHAPE_MAXRANK - 1) - axis];
+        indexB += (((threadIdx / stridesO[(SHAPE_MAXRANK - 1) - axis]) % shapeO[(SHAPE_MAXRANK - 1) - axis]) % shapeB[(SHAPE_MAXRANK - 1) - axis]) * stridesB[(SHAPE_MAXRANK - 1) - axis];
+    }
+
+    Optr[threadIdx] = CompareOp(Xptr[indexA], Bptr[indexB]);
+}
+

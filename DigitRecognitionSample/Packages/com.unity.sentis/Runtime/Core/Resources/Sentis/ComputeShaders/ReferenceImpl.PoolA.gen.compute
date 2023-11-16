@@ -1,0 +1,151 @@
+// This is auto-generated -- do not modify directly
+
+#pragma kernel MaxPool2D MAXPOOL2D
+#pragma kernel AveragePool2D AVERAGEPOOL2D
+#pragma kernel MaxPool1D MAXPOOL1D
+#pragma kernel AveragePool1D AVERAGEPOOL1D
+#include "Tensor.cginc"
+
+uint2 unrolledDispatchArgs;
+int strideX;
+int strideY;
+int padX;
+int padY;
+int poolX;
+int poolY;
+int inHeight;
+int inWidth;
+int outHeight;
+int outWidth;
+int stride;
+int pad;
+int pool;
+StructuredBuffer<float> Xptr;
+RWStructuredBuffer<float> Optr;
+
+
+#ifdef MAXPOOL2D
+[numthreads(64, 1, 1)]
+void MaxPool2D(uint3 dispatchThreadID : SV_DispatchThreadID)
+{
+    uint threadIdx = unrolledDispatchArgs.x * dispatchThreadID.y + dispatchThreadID.x;
+    if(threadIdx >= unrolledDispatchArgs.y)
+        return;
+    {
+        int x = threadIdx % outWidth;
+        int y = (threadIdx / outWidth) % outHeight;
+        int z = threadIdx / (outWidth * outHeight);
+
+        float maxVal = FLT_MIN;
+        for (int dy = 0; dy < poolY; ++dy)
+        for (int dx = 0; dx < poolX; ++dx)
+        {
+            int oy = y * strideY + dy - padY;
+            int ox = x * strideX + dx - padX;
+
+            if (oy < 0) continue;
+            if (oy >= inHeight) continue;
+            if (ox < 0) continue;
+            if (ox >= inWidth) continue;
+
+            float v = Xptr[z * inWidth * inHeight + oy * inWidth + ox];
+            maxVal = max(v, maxVal);
+        }
+        Optr[threadIdx] = maxVal;
+    }
+}
+#endif
+
+
+#ifdef AVERAGEPOOL2D
+[numthreads(64, 1, 1)]
+void AveragePool2D(uint3 dispatchThreadID : SV_DispatchThreadID)
+{
+    uint threadIdx = unrolledDispatchArgs.x * dispatchThreadID.y + dispatchThreadID.x;
+    if(threadIdx >= unrolledDispatchArgs.y)
+        return;
+    {
+        int x = threadIdx % outWidth;
+        int y = (threadIdx / outWidth) % outHeight;
+        int z = threadIdx / (outWidth * outHeight);
+
+        float counter = 0.0f;
+        float sumVal = 0.0f;
+        for (int dy = 0; dy < poolY; ++dy)
+        for (int dx = 0; dx < poolX; ++dx)
+        {
+            int oy = y * strideY + dy - padY;
+            int ox = x * strideX + dx - padX;
+
+            if (oy < 0) continue;
+            if (oy >= inHeight) continue;
+            if (ox < 0) continue;
+            if (ox >= inWidth) continue;
+
+            float v = Xptr[z * inWidth * inHeight + oy * inWidth + ox];
+            sumVal += v;
+            counter += 1.0f;
+        }
+        Optr[threadIdx] = sumVal/counter;
+    }
+}
+#endif
+
+
+#ifdef MAXPOOL1D
+[numthreads(64, 1, 1)]
+void MaxPool1D(uint3 dispatchThreadID : SV_DispatchThreadID)
+{
+    uint threadIdx = unrolledDispatchArgs.x * dispatchThreadID.y + dispatchThreadID.x;
+    if(threadIdx >= unrolledDispatchArgs.y)
+        return;
+    {
+        int x = threadIdx % outHeight;
+        int z = threadIdx / outHeight;
+
+        float maxVal = FLT_MIN;
+        for (int dx = 0; dx < pool; ++dx)
+        {
+            int ox = x * stride + dx - pad;
+
+            if (ox < 0) continue;
+            if (ox >= inHeight) continue;
+
+            float v = Xptr[z * inHeight + ox];
+            maxVal = max(v, maxVal);
+        }
+        Optr[threadIdx] = maxVal;
+    }
+}
+#endif
+
+
+#ifdef AVERAGEPOOL1D
+[numthreads(64, 1, 1)]
+void AveragePool1D(uint3 dispatchThreadID : SV_DispatchThreadID)
+{
+    uint threadIdx = unrolledDispatchArgs.x * dispatchThreadID.y + dispatchThreadID.x;
+    if(threadIdx >= unrolledDispatchArgs.y)
+        return;
+    {
+        int x = threadIdx % outHeight;
+        int z = threadIdx / outHeight;
+
+        float counter = 0.0f;
+        float sumVal = 0.0f;
+        for (int dx = 0; dx < pool; ++dx)
+        {
+            int ox = x * stride + dx - pad;
+
+            if (ox < 0) continue;
+            if (ox >= inHeight) continue;
+
+            float v = Xptr[z * inHeight + ox];
+            sumVal += v;
+            counter += 1.0f;
+        }
+        Optr[threadIdx] = sumVal/counter;
+    }
+}
+#endif
+

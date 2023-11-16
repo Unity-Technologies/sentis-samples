@@ -1,0 +1,48 @@
+#pragma kernel MatMul
+
+#include "Tensor.cginc"
+
+StructuredBuffer<float> Xptr;
+StructuredBuffer<float> Yptr;
+StructuredBuffer<float> Kptr;
+StructuredBuffer<float> Wptr;
+StructuredBuffer<float> Bptr;
+RWStructuredBuffer<float> Optr;
+
+uint AM, AN;
+uint BM, BN;
+uint CB, CM, CN;
+uint rank;
+uint shapeO[6], stridesO[6];
+uint shapeA[6], stridesA[6];
+uint shapeB[6], stridesB[6];
+
+[numthreads(4, 4, 4)]
+void MatMul(uint3 dispatchThreadID : SV_DispatchThreadID)
+{
+    uint batchOffSetC = dispatchThreadID.x;
+    uint j = dispatchThreadID.y;
+    uint i = dispatchThreadID.z;
+
+    if (i >= CN) return;
+    if (j >= CM) return;
+    if (batchOffSetC >= CB) return;
+
+    uint batchOffSetA = 0; uint batchOffSetB = 0;
+    for (uint axis = 5; axis > (5 - (rank - 2)); axis--)
+    {
+        batchOffSetA += (((batchOffSetC / stridesO[axis]) % shapeO[axis]) % shapeA[axis]) * stridesA[axis];
+        batchOffSetB += (((batchOffSetC / stridesO[axis]) % shapeO[axis]) % shapeB[axis]) * stridesB[axis];
+    }
+
+
+    float v = 0.0f;
+    for (uint l = 0; l < AN; ++l)
+    {
+        float vX = Xptr[batchOffSetA * AM * AN + j * AN + l];
+        float vY = Bptr[batchOffSetB * BM * BN + l * BN + i];
+        v += vX * vY;
+    }
+
+    Optr[batchOffSetC * CM * CN + j * CN + i] = v;
+}

@@ -1,0 +1,66 @@
+#pragma kernel Or OR SUFFIX=Or
+#pragma kernel And AND SUFFIX=And
+#pragma kernel Xor XOR SUFFIX=Xor
+#pragma kernel Not
+
+#include "Tensor.cginc"
+
+int shapeO[8];
+int stridesO[8];
+int shapeA[8];
+int stridesA[8];
+int shapeB[8];
+int stridesB[8];
+uint2 unrolledDispatchArgs;
+int rank;
+
+StructuredBuffer<int> Xptr;
+StructuredBuffer<int> Bptr;
+RWStructuredBuffer<int> Optr;
+
+inline int CompareOp(int x, int y)
+{
+#ifdef OR
+    return x | y;
+#endif
+#ifdef AND
+    return x & y;
+#endif
+#ifdef XOR
+    return x ^ y;
+#endif
+    return 0;
+}
+
+[numthreads(64, 1, 1)]
+void SUFFIX(uint3 dispatchThreadID : SV_DispatchThreadID)
+{
+    uint threadIdx = unrolledDispatchArgs.x * dispatchThreadID.y + dispatchThreadID.x;
+    if (threadIdx >= unrolledDispatchArgs.y)
+        return;
+
+    int indexA = 0; int indexB = 0;
+    for (int axis = 0; axis < rank; axis++)
+    {
+        indexA += (((threadIdx / stridesO[(SHAPE_MAXRANK - 1) - axis]) % shapeO[(SHAPE_MAXRANK - 1) - axis]) % shapeA[(SHAPE_MAXRANK - 1) - axis]) * stridesA[(SHAPE_MAXRANK - 1) - axis];
+        indexB += (((threadIdx / stridesO[(SHAPE_MAXRANK - 1) - axis]) % shapeO[(SHAPE_MAXRANK - 1) - axis]) % shapeB[(SHAPE_MAXRANK - 1) - axis]) * stridesB[(SHAPE_MAXRANK - 1) - axis];
+    }
+
+    int a = Xptr[indexA];
+    int b = Bptr[indexB];
+
+    Optr[threadIdx] = CompareOp(a, b);
+}
+
+
+[numthreads(64, 1, 1)]
+void Not(uint3 dispatchThreadID : SV_DispatchThreadID)
+{
+    uint threadIdx = unrolledDispatchArgs.x * dispatchThreadID.y + dispatchThreadID.x;
+    if (threadIdx >= unrolledDispatchArgs.y)
+        return;
+
+    Optr[threadIdx] = (Xptr[threadIdx] == 0) ? 1 : 0;
+}
+
+

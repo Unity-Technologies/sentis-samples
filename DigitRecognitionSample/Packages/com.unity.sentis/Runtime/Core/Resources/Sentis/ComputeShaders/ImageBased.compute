@@ -1,0 +1,196 @@
+#pragma kernel RoiAlignAvg ROIALIGN AVG MODE_R=Avg
+#pragma kernel RoiAlignMax ROIALIGN MAX MODE_R=Max
+#pragma kernel DepthToSpaceDepthColumnRow DEPTHTOSPACE DEPTHCOLUMNROW MODE_D=DepthColumnRow
+#pragma kernel DepthToSpaceColumnRowDepth DEPTHTOSPACE COLUMNDEPTHROW MODE_D=ColumnRowDepth
+#pragma kernel SpaceToDepth
+#include "Tensor.cginc"
+
+uint2 unrolledDispatchArgs;
+float spatialScale;
+uint numRois;
+uint inputChannels;
+uint inputHeight;
+uint inputWidth;
+uint inputSpatialSize;
+uint inputBatchOffset;
+uint outputHeight;
+uint outputWidth;
+uint outputSpatialSize;
+float normalizeOHeight;
+float normalizeOWidth;
+int samplingRatio;
+StructuredBuffer<float> Xptr;
+StructuredBuffer<float> Sptr;
+StructuredBuffer<int> Bptr;
+RWStructuredBuffer<float> Optr;
+
+#define FUNC_NAME_R(MODE_R) RoiAlign##MODE_R
+
+[numthreads(8, 8, 1)]
+void FUNC_NAME_R(MODE_R)(uint3 dispatchThreadID : SV_DispatchThreadID)
+{
+    uint c = dispatchThreadID.x % inputChannels;
+    uint n = dispatchThreadID.x / inputChannels;
+    if (n >= numRois)
+        return;
+
+    uint xt = dispatchThreadID.y % outputWidth;
+    uint yt = dispatchThreadID.y / outputWidth;
+    if (yt >= outputHeight)
+        return;
+
+    uint batchIdx = (uint)Bptr[n];
+    uint Xp = batchIdx * inputBatchOffset + c * inputSpatialSize;
+
+    // https://github.com/pytorch/vision/blob/7dc5e5bd60b55eb4e6ea5c1265d6dc7b17d2e917/torchvision/csrc/ops/cpu/roi_align_kernel.cpp
+    // https://github.com/pytorch/vision/blob/7947fc8fb38b1d3a2aca03f22a2e6a3caa63f2a0/torchvision/csrc/ops/cpu/roi_align_common.h
+    float roiStartW = Sptr[n * 4 + 0] * spatialScale;
+    float roiStartH = Sptr[n * 4 + 1] * spatialScale;
+    float roiEndW = Sptr[n * 4 + 2] * spatialScale;
+    float roiEndH = Sptr[n * 4 + 3] * spatialScale;
+
+    float roiWidth = roiEndW - roiStartW;
+    float roiHeight = roiEndH - roiStartH;
+
+    roiWidth = max(roiWidth, 1.0f);
+    roiHeight = max(roiHeight, 1.0f);
+
+    float binSizeH = roiHeight / ((float)outputHeight);
+    float binSizeW = roiWidth / ((float)outputWidth);
+
+    int roiBinGridH = (samplingRatio > 0) ? samplingRatio : ceil(roiHeight * normalizeOHeight);
+    int roiBinGridW = (samplingRatio > 0) ? samplingRatio : ceil(roiWidth * normalizeOWidth);
+
+    int count = max(roiBinGridH * roiBinGridW, 1);
+
+    float startH = roiStartH + yt * binSizeH;
+    float startW = roiStartW + xt * binSizeW;
+
+    float v = 0.0f;
+    for (uint iy = 0; iy < (uint)roiBinGridH; iy++)
+    {
+        float y = startH + (iy + 0.5f) * binSizeH / ((float)roiBinGridH);
+
+        for (uint ix = 0; ix < (uint)roiBinGridW; ix++)
+        {
+            float x = startW + (ix + 0.5f) * binSizeW / ((float)roiBinGridW);
+
+            if (y >= (float)inputHeight || y < -1.0 || x >= (float)inputWidth || x < -1.0)
+                continue;
+
+            y = max(y, 0.0f);
+            x = max(x, 0.0f);
+
+            uint yLow = (uint)y;
+            uint xLow = (uint)x;
+            uint yHigh;
+            uint xHigh;
+
+            if (yLow >= inputHeight - 1)
+            {
+                yHigh = yLow = inputHeight - 1;
+                y = (float)yLow;
+            }
+            else
+            {
+                yHigh = yLow + 1;
+            }
+
+            if (xLow >= inputWidth - 1)
+            {
+                xHigh = xLow = inputWidth - 1;
+                x = (float)xLow;
+            }
+            else
+            {
+                xHigh = xLow + 1;
+            }
+
+            float ly = y - yLow;
+            float lx = x - xLow;
+            float hy = 1.0f - ly;
+            float hx = 1.0f - lx;
+            float w0 = hy * hx;
+            float w1 = hy * lx;
+            float w2 = ly * hx;
+            float w3 = ly * lx;
+
+            uint pos0 = yLow * inputWidth + xLow;
+            uint pos1 = yLow * inputWidth + xHigh;
+            uint pos2 = yHigh * inputWidth + xLow;
+            uint pos3 = yHigh * inputWidth + xHigh;
+            // TODO bake out pos*/w* as a separate kernel
+
+            float x0 = w0 * Xptr[Xp + pos0];
+            float x1 = w1 * Xptr[Xp + pos1];
+            float x2 = w2 * Xptr[Xp + pos2];
+            float x3 = w3 * Xptr[Xp + pos3];
+
+            #ifdef AVG
+            v = v + x0 + x1 + x2 + x3;
+            #endif
+            #ifdef MAX
+            v = max(v, max(x0, max(x1, max(x2, x3))));
+            #endif
+        }
+    }
+
+    #ifdef AVG
+        v /= count;
+    #endif
+    Optr[dispatchThreadID.x * outputSpatialSize + dispatchThreadID.y] = v;
+}
+
+uint outputChannels;
+uint outputBatch;
+uint blocksize;
+
+#define FUNC_NAME_D(MODE_D) DepthToSpace##MODE_D
+
+[numthreads(8, 8, 1)]
+void FUNC_NAME_D(MODE_D)(uint3 dispatchThreadID : SV_DispatchThreadID)
+{
+    uint c = dispatchThreadID.x % outputChannels;
+    uint n = dispatchThreadID.x / outputChannels;
+    if (n >= outputBatch)
+        return;
+
+    uint x = dispatchThreadID.y % outputWidth;
+    uint y = dispatchThreadID.y / outputWidth;
+    if (y >= outputHeight)
+        return;
+
+    uint iy = y / blocksize;
+    uint by = y % blocksize;
+    uint ix = x / blocksize;
+    uint bx = x % blocksize;
+
+    #ifdef COLUMNDEPTHROW
+        Optr[dispatchThreadID.x * outputSpatialSize + dispatchThreadID.y] = Xptr[n * inputBatchOffset + (c * blocksize * blocksize + by * blocksize + bx) * inputSpatialSize + iy * inputWidth + ix];
+    #endif
+    #ifdef DEPTHCOLUMNROW
+        Optr[dispatchThreadID.x * outputSpatialSize + dispatchThreadID.y] = Xptr[n * inputBatchOffset + (by * blocksize * outputChannels + bx * outputChannels + c) * inputSpatialSize + iy * inputWidth + ix];
+    #endif
+}
+
+[numthreads(8, 8, 1)]
+void SpaceToDepth(uint3 dispatchThreadID : SV_DispatchThreadID)
+{
+    uint c = dispatchThreadID.x % outputChannels;
+    uint n = dispatchThreadID.x / outputChannels;
+    if (n >= outputBatch)
+        return;
+
+    uint x = dispatchThreadID.y % outputWidth;
+    uint y = dispatchThreadID.y / outputWidth;
+    if (y >= outputHeight)
+        return;
+
+    uint ic = ((uint)c % inputChannels);
+    uint bx = ((uint)c / inputChannels) % blocksize;
+    uint by = ((uint)c / inputChannels) / blocksize;
+    uint ix = x * blocksize + bx;
+    uint iy = y * blocksize + by;
+
+    Optr[dispatchThreadID.x * outputSpatialSize + dispatchThreadID.y] = Xptr[n *inputBatchOffset + ic * inputSpatialSize + iy * inputWidth + ix];
+}

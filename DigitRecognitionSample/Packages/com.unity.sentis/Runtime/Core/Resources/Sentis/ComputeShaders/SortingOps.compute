@@ -1,0 +1,88 @@
+#pragma kernel TopKLargest LARGEST MODE=Largest
+#pragma kernel TopKSmallest SMALLEST MAX MODE=Smallest
+
+StructuredBuffer<float> Xptr;
+RWStructuredBuffer<float> Valuesptr;
+RWStructuredBuffer<int> Indicesptr;
+
+uint innerLength;
+uint outerLength;
+uint reduceLength;
+uint maxK;
+
+#define FUNC_NAME(MODE) TopK##MODE
+
+[numthreads(8, 8, 1)]
+void FUNC_NAME(MODE)(uint3 dispatchThreadID : SV_DispatchThreadID)
+{
+    uint innerIndex = dispatchThreadID.x;
+    uint outerIndex = dispatchThreadID.y;
+
+    if (innerIndex >= innerLength || outerIndex >= outerLength)
+        return;
+
+    uint readOffsetX = outerIndex * reduceLength * innerLength + innerIndex;
+    uint readOffsetO = outerIndex * maxK * innerLength + innerIndex;
+
+    // https://github.com/anilshanbhag/gpu-topk
+    // should favor bitonic topK in the future or is k is large
+    // insertion sort + binary search index
+    // https://en.wikipedia.org/wiki/Insertion_sort#Variants
+    // O(k*n) complexity, fine for small k
+    // output is always sorted, for each values of v
+    // shift all top-k starting from the selected index, insert v
+    float v = Xptr[readOffsetX];
+    Valuesptr[readOffsetO] = v;
+    Indicesptr[readOffsetO] = 0;
+    #if defined(LARGEST)
+    float minOValue = v;
+    #else
+    float minOValue = -v;
+    #endif
+    uint k = 1;
+    for (uint j = 1; j < reduceLength; j++)
+    {
+        v = Xptr[readOffsetX + j * innerLength];
+
+        #if defined(LARGEST)
+        if (k == maxK && v <= minOValue)
+        #else
+        if (k == maxK && -v <= minOValue)
+        #endif
+        continue;
+
+        k = min(k + 1, maxK);
+        uint idxLast = (k - 1) * innerLength + readOffsetO;
+        Valuesptr[idxLast] = v;
+        Indicesptr[idxLast] = j;
+
+        for (uint i = k - 1; i > 0; i--)
+        {
+            uint idx = i * innerLength + readOffsetO;
+            uint idxPrev = (i - 1) * innerLength + readOffsetO;
+
+            float swapf = Valuesptr[idx];
+
+            #if defined(LARGEST)
+            if (Valuesptr[idxPrev] >= swapf)
+            #else
+            if (-Valuesptr[idxPrev] >= -swapf)
+            #endif
+            break;
+
+            int swapi = Indicesptr[idx];
+
+            Valuesptr[idx] = Valuesptr[idxPrev];
+            Valuesptr[idxPrev] = swapf;
+
+            Indicesptr[idx] = Indicesptr[idxPrev];
+            Indicesptr[idxPrev] = swapi;
+        }
+        #if defined(LARGEST)
+        minOValue = min(Valuesptr[(k - 1)*innerLength + readOffsetO], v);
+        #else
+        minOValue = min(-Valuesptr[(k - 1)*innerLength + readOffsetO], v);
+        #endif
+    }
+}
+

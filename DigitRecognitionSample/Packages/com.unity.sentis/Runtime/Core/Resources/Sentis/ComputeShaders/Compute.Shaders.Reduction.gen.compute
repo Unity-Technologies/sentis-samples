@@ -1,0 +1,1525 @@
+// This is auto-generated -- do not modify directly
+
+
+#pragma kernel ReduceMaxFloat FLOAT PARTIAL SUFFIX_REDUCEMAXFLOAT = ReduceMaxFloat
+#pragma kernel GlobalReduceMaxFloat FLOAT GLOBAL SUFFIX_REDUCEMAXFLOAT = GlobalReduceMaxFloat
+
+#pragma kernel ReduceMinFloat FLOAT PARTIAL SUFFIX_REDUCEMINFLOAT = ReduceMinFloat
+#pragma kernel GlobalReduceMinFloat FLOAT GLOBAL SUFFIX_REDUCEMINFLOAT = GlobalReduceMinFloat
+
+#pragma kernel ReduceSumFloat FLOAT PARTIAL SUFFIX_REDUCESUMFLOAT = ReduceSumFloat
+#pragma kernel GlobalReduceSumFloat FLOAT GLOBAL SUFFIX_REDUCESUMFLOAT = GlobalReduceSumFloat
+
+#pragma kernel ReduceSumSquareFloat FLOAT PARTIAL SUFFIX_REDUCESUMSQUAREFLOAT = ReduceSumSquareFloat
+#pragma kernel GlobalReduceSumSquareFloat FLOAT GLOBAL SUFFIX_REDUCESUMSQUAREFLOAT = GlobalReduceSumSquareFloat
+
+#pragma kernel ReduceMeanFloat FLOAT PARTIAL SUFFIX_REDUCEMEANFLOAT = ReduceMeanFloat
+#pragma kernel GlobalReduceMeanFloat FLOAT GLOBAL SUFFIX_REDUCEMEANFLOAT = GlobalReduceMeanFloat
+
+#pragma kernel ReduceProdFloat FLOAT PARTIAL SUFFIX_REDUCEPRODFLOAT = ReduceProdFloat
+#pragma kernel GlobalReduceProdFloat FLOAT GLOBAL SUFFIX_REDUCEPRODFLOAT = GlobalReduceProdFloat
+
+#pragma kernel ReduceL1Float FLOAT PARTIAL SUFFIX_REDUCEL1FLOAT = ReduceL1Float
+#pragma kernel GlobalReduceL1Float FLOAT GLOBAL SUFFIX_REDUCEL1FLOAT = GlobalReduceL1Float
+
+#pragma kernel ReduceL2Float FLOAT PARTIAL SUFFIX_REDUCEL2FLOAT = ReduceL2Float
+#pragma kernel GlobalReduceL2Float FLOAT GLOBAL SUFFIX_REDUCEL2FLOAT = GlobalReduceL2Float
+
+#pragma kernel ReduceSqrtFloat FLOAT PARTIAL SUFFIX_REDUCESQRTFLOAT = ReduceSqrtFloat
+#pragma kernel GlobalReduceSqrtFloat FLOAT GLOBAL SUFFIX_REDUCESQRTFLOAT = GlobalReduceSqrtFloat
+
+#pragma kernel ReduceLogSumFloat FLOAT PARTIAL SUFFIX_REDUCELOGSUMFLOAT = ReduceLogSumFloat
+#pragma kernel GlobalReduceLogSumFloat FLOAT GLOBAL SUFFIX_REDUCELOGSUMFLOAT = GlobalReduceLogSumFloat
+
+#pragma kernel ReduceLogSumExpFloat FLOAT PARTIAL SUFFIX_REDUCELOGSUMEXPFLOAT = ReduceLogSumExpFloat
+#pragma kernel GlobalReduceLogSumExpFloat FLOAT GLOBAL SUFFIX_REDUCELOGSUMEXPFLOAT = GlobalReduceLogSumExpFloat
+
+#pragma kernel ReduceSumExpFloat FLOAT PARTIAL SUFFIX_REDUCESUMEXPFLOAT = ReduceSumExpFloat
+#pragma kernel GlobalReduceSumExpFloat FLOAT GLOBAL SUFFIX_REDUCESUMEXPFLOAT = GlobalReduceSumExpFloat
+
+#pragma kernel ReduceMaxInt INT PARTIAL SUFFIX_REDUCEMAXINT = ReduceMaxInt
+#pragma kernel GlobalReduceMaxInt INT GLOBAL SUFFIX_REDUCEMAXINT = GlobalReduceMaxInt
+
+#pragma kernel ReduceMinInt INT PARTIAL SUFFIX_REDUCEMININT = ReduceMinInt
+#pragma kernel GlobalReduceMinInt INT GLOBAL SUFFIX_REDUCEMININT = GlobalReduceMinInt
+
+#pragma kernel ReduceSumInt INT PARTIAL SUFFIX_REDUCESUMINT = ReduceSumInt
+#pragma kernel GlobalReduceSumInt INT GLOBAL SUFFIX_REDUCESUMINT = GlobalReduceSumInt
+
+#pragma kernel ReduceSumSquareInt INT PARTIAL SUFFIX_REDUCESUMSQUAREINT = ReduceSumSquareInt
+#pragma kernel GlobalReduceSumSquareInt INT GLOBAL SUFFIX_REDUCESUMSQUAREINT = GlobalReduceSumSquareInt
+
+#pragma kernel ReduceProdInt INT PARTIAL SUFFIX_REDUCEPRODINT = ReduceProdInt
+#pragma kernel GlobalReduceProdInt INT GLOBAL SUFFIX_REDUCEPRODINT = GlobalReduceProdInt
+
+#pragma kernel ReduceL1Int INT PARTIAL SUFFIX_REDUCEL1INT = ReduceL1Int
+#pragma kernel GlobalReduceL1Int INT GLOBAL SUFFIX_REDUCEL1INT = GlobalReduceL1Int
+
+#include "Tensor.cginc"
+
+uint ReducedDim, InnerDim;
+uint SpatialDimsO;
+float Normalization;
+uint IsFirstDispatch;
+
+#ifdef INT
+StructuredBuffer<int> Xptr;
+RWStructuredBuffer<int> Optr;
+#else
+StructuredBuffer<float> Xptr;
+RWStructuredBuffer<float> Optr;
+#endif
+
+StructuredBuffer<float> Bptr;
+
+#define POOL_SIZE 64
+#ifdef INT
+groupshared int LDS_AccumulationBuffer[POOL_SIZE];
+#else
+groupshared float LDS_AccumulationBuffer[POOL_SIZE];
+#endif
+
+
+
+inline float rda_maxf(float v0, float v1)
+{
+    return max(v0, v1);
+}
+
+
+inline void ReduceMaxFloatInternalReduce(uint gtz, uint s)
+{
+    if (gtz < s)
+    {
+        float v0 = LDS_AccumulationBuffer[gtz];
+        float v1 = LDS_AccumulationBuffer[gtz + s];
+        float acc = rda_maxf(v0, v1);
+        LDS_AccumulationBuffer[gtz] = acc;
+    }
+    GroupMemoryBarrierWithGroupSync();
+}
+
+[numthreads(1, POOL_SIZE, 1)]
+void SUFFIX_REDUCEMAXFLOAT(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV_GroupThreadID, uint3 groupId : SV_GroupID)
+{
+    uint outer = dispatchThreadID.x;
+    uint inner = dispatchThreadID.z;
+
+    uint gts = groupThreadID.y;
+    uint gs = groupId.y;
+
+    // https://developer.download.nvidia.com/assets/cuda/files/reduction.pdf
+    // half the number of blocks (x and y) replaced with 4 loads
+    uint s = gs * POOL_SIZE * 4 + gts;
+
+    #if defined(SHADER_API_MOBILE)
+    float v0 = s + 0 * POOL_SIZE >= ReducedDim ? FLT_MIN : Xptr[outer * ReducedDim * InnerDim + min(s + 0 * POOL_SIZE, ReducedDim) * InnerDim + inner];
+    float v1 = s + 1 * POOL_SIZE >= ReducedDim ? FLT_MIN : Xptr[outer * ReducedDim * InnerDim + min(s + 1 * POOL_SIZE, ReducedDim) * InnerDim + inner];
+    float v2 = s + 2 * POOL_SIZE >= ReducedDim ? FLT_MIN : Xptr[outer * ReducedDim * InnerDim + min(s + 2 * POOL_SIZE, ReducedDim) * InnerDim + inner];
+    float v3 = s + 3 * POOL_SIZE >= ReducedDim ? FLT_MIN : Xptr[outer * ReducedDim * InnerDim + min(s + 3 * POOL_SIZE, ReducedDim) * InnerDim + inner];
+    #else
+    float v0 = s + 0 * POOL_SIZE >= ReducedDim ? FLT_MIN : Xptr[outer * ReducedDim * InnerDim + (s + 0 * POOL_SIZE) * InnerDim + inner];
+    float v1 = s + 1 * POOL_SIZE >= ReducedDim ? FLT_MIN : Xptr[outer * ReducedDim * InnerDim + (s + 1 * POOL_SIZE) * InnerDim + inner];
+    float v2 = s + 2 * POOL_SIZE >= ReducedDim ? FLT_MIN : Xptr[outer * ReducedDim * InnerDim + (s + 2 * POOL_SIZE) * InnerDim + inner];
+    float v3 = s + 3 * POOL_SIZE >= ReducedDim ? FLT_MIN : Xptr[outer * ReducedDim * InnerDim + (s + 3 * POOL_SIZE) * InnerDim + inner];
+    #endif
+
+    
+    LDS_AccumulationBuffer[gts] = rda_maxf(v0, rda_maxf(v1, rda_maxf(v2, v3)));
+
+    GroupMemoryBarrierWithGroupSync();
+
+    // sequential addressing
+    // mem = [x0...xn y0..yn]
+    //     = [x0+y0...xn+yn ...]
+    // last sum saved for last
+    // following code is unrolled:
+    // for s = (POOL_SIZE) / 2; s > 1; s >>= 1
+    ReduceMaxFloatInternalReduce(gts, 32);
+    ReduceMaxFloatInternalReduce(gts, 16);
+    ReduceMaxFloatInternalReduce(gts, 8);
+    ReduceMaxFloatInternalReduce(gts, 4);
+    ReduceMaxFloatInternalReduce(gts, 2);
+
+    if (gts == 0)
+    {
+        float accVal = rda_maxf(LDS_AccumulationBuffer[0], LDS_AccumulationBuffer[1]);
+#if defined(GLOBAL)
+        accVal = accVal;
+        Optr[outer * InnerDim + inner] = accVal;
+#endif
+#if defined(PARTIAL)
+        Optr[outer * SpatialDimsO * InnerDim + gs * InnerDim + inner] = accVal;
+#endif
+    }
+}
+
+
+
+inline float rda_minf(float v0, float v1)
+{
+    return min(v0, v1);
+}
+
+
+inline void ReduceMinFloatInternalReduce(uint gtz, uint s)
+{
+    if (gtz < s)
+    {
+        float v0 = LDS_AccumulationBuffer[gtz];
+        float v1 = LDS_AccumulationBuffer[gtz + s];
+        float acc = rda_minf(v0, v1);
+        LDS_AccumulationBuffer[gtz] = acc;
+    }
+    GroupMemoryBarrierWithGroupSync();
+}
+
+[numthreads(1, POOL_SIZE, 1)]
+void SUFFIX_REDUCEMINFLOAT(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV_GroupThreadID, uint3 groupId : SV_GroupID)
+{
+    uint outer = dispatchThreadID.x;
+    uint inner = dispatchThreadID.z;
+
+    uint gts = groupThreadID.y;
+    uint gs = groupId.y;
+
+    // https://developer.download.nvidia.com/assets/cuda/files/reduction.pdf
+    // half the number of blocks (x and y) replaced with 4 loads
+    uint s = gs * POOL_SIZE * 4 + gts;
+
+    #if defined(SHADER_API_MOBILE)
+    float v0 = s + 0 * POOL_SIZE >= ReducedDim ? FLT_MAX : Xptr[outer * ReducedDim * InnerDim + min(s + 0 * POOL_SIZE, ReducedDim) * InnerDim + inner];
+    float v1 = s + 1 * POOL_SIZE >= ReducedDim ? FLT_MAX : Xptr[outer * ReducedDim * InnerDim + min(s + 1 * POOL_SIZE, ReducedDim) * InnerDim + inner];
+    float v2 = s + 2 * POOL_SIZE >= ReducedDim ? FLT_MAX : Xptr[outer * ReducedDim * InnerDim + min(s + 2 * POOL_SIZE, ReducedDim) * InnerDim + inner];
+    float v3 = s + 3 * POOL_SIZE >= ReducedDim ? FLT_MAX : Xptr[outer * ReducedDim * InnerDim + min(s + 3 * POOL_SIZE, ReducedDim) * InnerDim + inner];
+    #else
+    float v0 = s + 0 * POOL_SIZE >= ReducedDim ? FLT_MAX : Xptr[outer * ReducedDim * InnerDim + (s + 0 * POOL_SIZE) * InnerDim + inner];
+    float v1 = s + 1 * POOL_SIZE >= ReducedDim ? FLT_MAX : Xptr[outer * ReducedDim * InnerDim + (s + 1 * POOL_SIZE) * InnerDim + inner];
+    float v2 = s + 2 * POOL_SIZE >= ReducedDim ? FLT_MAX : Xptr[outer * ReducedDim * InnerDim + (s + 2 * POOL_SIZE) * InnerDim + inner];
+    float v3 = s + 3 * POOL_SIZE >= ReducedDim ? FLT_MAX : Xptr[outer * ReducedDim * InnerDim + (s + 3 * POOL_SIZE) * InnerDim + inner];
+    #endif
+
+    
+    LDS_AccumulationBuffer[gts] = rda_minf(v0, rda_minf(v1, rda_minf(v2, v3)));
+
+    GroupMemoryBarrierWithGroupSync();
+
+    // sequential addressing
+    // mem = [x0...xn y0..yn]
+    //     = [x0+y0...xn+yn ...]
+    // last sum saved for last
+    // following code is unrolled:
+    // for s = (POOL_SIZE) / 2; s > 1; s >>= 1
+    ReduceMinFloatInternalReduce(gts, 32);
+    ReduceMinFloatInternalReduce(gts, 16);
+    ReduceMinFloatInternalReduce(gts, 8);
+    ReduceMinFloatInternalReduce(gts, 4);
+    ReduceMinFloatInternalReduce(gts, 2);
+
+    if (gts == 0)
+    {
+        float accVal = rda_minf(LDS_AccumulationBuffer[0], LDS_AccumulationBuffer[1]);
+#if defined(GLOBAL)
+        accVal = accVal;
+        Optr[outer * InnerDim + inner] = accVal;
+#endif
+#if defined(PARTIAL)
+        Optr[outer * SpatialDimsO * InnerDim + gs * InnerDim + inner] = accVal;
+#endif
+    }
+}
+
+
+
+inline float rda_sumf(float v0, float v1)
+{
+    return v0 + v1;
+}
+
+
+inline void ReduceSumFloatInternalReduce(uint gtz, uint s)
+{
+    if (gtz < s)
+    {
+        float v0 = LDS_AccumulationBuffer[gtz];
+        float v1 = LDS_AccumulationBuffer[gtz + s];
+        float acc = rda_sumf(v0, v1);
+        LDS_AccumulationBuffer[gtz] = acc;
+    }
+    GroupMemoryBarrierWithGroupSync();
+}
+
+[numthreads(1, POOL_SIZE, 1)]
+void SUFFIX_REDUCESUMFLOAT(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV_GroupThreadID, uint3 groupId : SV_GroupID)
+{
+    uint outer = dispatchThreadID.x;
+    uint inner = dispatchThreadID.z;
+
+    uint gts = groupThreadID.y;
+    uint gs = groupId.y;
+
+    // https://developer.download.nvidia.com/assets/cuda/files/reduction.pdf
+    // half the number of blocks (x and y) replaced with 4 loads
+    uint s = gs * POOL_SIZE * 4 + gts;
+
+    #if defined(SHADER_API_MOBILE)
+    float v0 = s + 0 * POOL_SIZE >= ReducedDim ? 0.0f : Xptr[outer * ReducedDim * InnerDim + min(s + 0 * POOL_SIZE, ReducedDim) * InnerDim + inner];
+    float v1 = s + 1 * POOL_SIZE >= ReducedDim ? 0.0f : Xptr[outer * ReducedDim * InnerDim + min(s + 1 * POOL_SIZE, ReducedDim) * InnerDim + inner];
+    float v2 = s + 2 * POOL_SIZE >= ReducedDim ? 0.0f : Xptr[outer * ReducedDim * InnerDim + min(s + 2 * POOL_SIZE, ReducedDim) * InnerDim + inner];
+    float v3 = s + 3 * POOL_SIZE >= ReducedDim ? 0.0f : Xptr[outer * ReducedDim * InnerDim + min(s + 3 * POOL_SIZE, ReducedDim) * InnerDim + inner];
+    #else
+    float v0 = s + 0 * POOL_SIZE >= ReducedDim ? 0.0f : Xptr[outer * ReducedDim * InnerDim + (s + 0 * POOL_SIZE) * InnerDim + inner];
+    float v1 = s + 1 * POOL_SIZE >= ReducedDim ? 0.0f : Xptr[outer * ReducedDim * InnerDim + (s + 1 * POOL_SIZE) * InnerDim + inner];
+    float v2 = s + 2 * POOL_SIZE >= ReducedDim ? 0.0f : Xptr[outer * ReducedDim * InnerDim + (s + 2 * POOL_SIZE) * InnerDim + inner];
+    float v3 = s + 3 * POOL_SIZE >= ReducedDim ? 0.0f : Xptr[outer * ReducedDim * InnerDim + (s + 3 * POOL_SIZE) * InnerDim + inner];
+    #endif
+
+    
+    LDS_AccumulationBuffer[gts] = rda_sumf(v0, rda_sumf(v1, rda_sumf(v2, v3)));
+
+    GroupMemoryBarrierWithGroupSync();
+
+    // sequential addressing
+    // mem = [x0...xn y0..yn]
+    //     = [x0+y0...xn+yn ...]
+    // last sum saved for last
+    // following code is unrolled:
+    // for s = (POOL_SIZE) / 2; s > 1; s >>= 1
+    ReduceSumFloatInternalReduce(gts, 32);
+    ReduceSumFloatInternalReduce(gts, 16);
+    ReduceSumFloatInternalReduce(gts, 8);
+    ReduceSumFloatInternalReduce(gts, 4);
+    ReduceSumFloatInternalReduce(gts, 2);
+
+    if (gts == 0)
+    {
+        float accVal = rda_sumf(LDS_AccumulationBuffer[0], LDS_AccumulationBuffer[1]);
+#if defined(GLOBAL)
+        accVal = accVal;
+        Optr[outer * InnerDim + inner] = accVal;
+#endif
+#if defined(PARTIAL)
+        Optr[outer * SpatialDimsO * InnerDim + gs * InnerDim + inner] = accVal;
+#endif
+    }
+}
+
+
+
+inline float rda_sum2f(float v0, float v1)
+{
+    return v0 + v1;
+}
+
+        
+inline float rdi_sum2f(float v)
+{
+    return IsFirstDispatch ? v * v : v;
+}
+
+inline void ReduceSumSquareFloatInternalReduce(uint gtz, uint s)
+{
+    if (gtz < s)
+    {
+        float v0 = LDS_AccumulationBuffer[gtz];
+        float v1 = LDS_AccumulationBuffer[gtz + s];
+        float acc = rda_sum2f(v0, v1);
+        LDS_AccumulationBuffer[gtz] = acc;
+    }
+    GroupMemoryBarrierWithGroupSync();
+}
+
+[numthreads(1, POOL_SIZE, 1)]
+void SUFFIX_REDUCESUMSQUAREFLOAT(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV_GroupThreadID, uint3 groupId : SV_GroupID)
+{
+    uint outer = dispatchThreadID.x;
+    uint inner = dispatchThreadID.z;
+
+    uint gts = groupThreadID.y;
+    uint gs = groupId.y;
+
+    // https://developer.download.nvidia.com/assets/cuda/files/reduction.pdf
+    // half the number of blocks (x and y) replaced with 4 loads
+    uint s = gs * POOL_SIZE * 4 + gts;
+
+    #if defined(SHADER_API_MOBILE)
+    float v0 = s + 0 * POOL_SIZE >= ReducedDim ? 0.0f : Xptr[outer * ReducedDim * InnerDim + min(s + 0 * POOL_SIZE, ReducedDim) * InnerDim + inner];
+    float v1 = s + 1 * POOL_SIZE >= ReducedDim ? 0.0f : Xptr[outer * ReducedDim * InnerDim + min(s + 1 * POOL_SIZE, ReducedDim) * InnerDim + inner];
+    float v2 = s + 2 * POOL_SIZE >= ReducedDim ? 0.0f : Xptr[outer * ReducedDim * InnerDim + min(s + 2 * POOL_SIZE, ReducedDim) * InnerDim + inner];
+    float v3 = s + 3 * POOL_SIZE >= ReducedDim ? 0.0f : Xptr[outer * ReducedDim * InnerDim + min(s + 3 * POOL_SIZE, ReducedDim) * InnerDim + inner];
+    #else
+    float v0 = s + 0 * POOL_SIZE >= ReducedDim ? 0.0f : Xptr[outer * ReducedDim * InnerDim + (s + 0 * POOL_SIZE) * InnerDim + inner];
+    float v1 = s + 1 * POOL_SIZE >= ReducedDim ? 0.0f : Xptr[outer * ReducedDim * InnerDim + (s + 1 * POOL_SIZE) * InnerDim + inner];
+    float v2 = s + 2 * POOL_SIZE >= ReducedDim ? 0.0f : Xptr[outer * ReducedDim * InnerDim + (s + 2 * POOL_SIZE) * InnerDim + inner];
+    float v3 = s + 3 * POOL_SIZE >= ReducedDim ? 0.0f : Xptr[outer * ReducedDim * InnerDim + (s + 3 * POOL_SIZE) * InnerDim + inner];
+    #endif
+
+            
+    v0 = rdi_sum2f(v0);
+    v1 = rdi_sum2f(v1);
+    v2 = rdi_sum2f(v2);
+    v3 = rdi_sum2f(v3);
+
+    LDS_AccumulationBuffer[gts] = rda_sum2f(v0, rda_sum2f(v1, rda_sum2f(v2, v3)));
+
+    GroupMemoryBarrierWithGroupSync();
+
+    // sequential addressing
+    // mem = [x0...xn y0..yn]
+    //     = [x0+y0...xn+yn ...]
+    // last sum saved for last
+    // following code is unrolled:
+    // for s = (POOL_SIZE) / 2; s > 1; s >>= 1
+    ReduceSumSquareFloatInternalReduce(gts, 32);
+    ReduceSumSquareFloatInternalReduce(gts, 16);
+    ReduceSumSquareFloatInternalReduce(gts, 8);
+    ReduceSumSquareFloatInternalReduce(gts, 4);
+    ReduceSumSquareFloatInternalReduce(gts, 2);
+
+    if (gts == 0)
+    {
+        float accVal = rda_sum2f(LDS_AccumulationBuffer[0], LDS_AccumulationBuffer[1]);
+#if defined(GLOBAL)
+        accVal = accVal;
+        Optr[outer * InnerDim + inner] = accVal;
+#endif
+#if defined(PARTIAL)
+        Optr[outer * SpatialDimsO * InnerDim + gs * InnerDim + inner] = accVal;
+#endif
+    }
+}
+
+
+
+inline float rda_meanf(float v0, float v1)
+{
+    return v0 + v1;
+}
+
+
+inline void ReduceMeanFloatInternalReduce(uint gtz, uint s)
+{
+    if (gtz < s)
+    {
+        float v0 = LDS_AccumulationBuffer[gtz];
+        float v1 = LDS_AccumulationBuffer[gtz + s];
+        float acc = rda_meanf(v0, v1);
+        LDS_AccumulationBuffer[gtz] = acc;
+    }
+    GroupMemoryBarrierWithGroupSync();
+}
+
+[numthreads(1, POOL_SIZE, 1)]
+void SUFFIX_REDUCEMEANFLOAT(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV_GroupThreadID, uint3 groupId : SV_GroupID)
+{
+    uint outer = dispatchThreadID.x;
+    uint inner = dispatchThreadID.z;
+
+    uint gts = groupThreadID.y;
+    uint gs = groupId.y;
+
+    // https://developer.download.nvidia.com/assets/cuda/files/reduction.pdf
+    // half the number of blocks (x and y) replaced with 4 loads
+    uint s = gs * POOL_SIZE * 4 + gts;
+
+    #if defined(SHADER_API_MOBILE)
+    float v0 = s + 0 * POOL_SIZE >= ReducedDim ? 0.0f : Xptr[outer * ReducedDim * InnerDim + min(s + 0 * POOL_SIZE, ReducedDim) * InnerDim + inner];
+    float v1 = s + 1 * POOL_SIZE >= ReducedDim ? 0.0f : Xptr[outer * ReducedDim * InnerDim + min(s + 1 * POOL_SIZE, ReducedDim) * InnerDim + inner];
+    float v2 = s + 2 * POOL_SIZE >= ReducedDim ? 0.0f : Xptr[outer * ReducedDim * InnerDim + min(s + 2 * POOL_SIZE, ReducedDim) * InnerDim + inner];
+    float v3 = s + 3 * POOL_SIZE >= ReducedDim ? 0.0f : Xptr[outer * ReducedDim * InnerDim + min(s + 3 * POOL_SIZE, ReducedDim) * InnerDim + inner];
+    #else
+    float v0 = s + 0 * POOL_SIZE >= ReducedDim ? 0.0f : Xptr[outer * ReducedDim * InnerDim + (s + 0 * POOL_SIZE) * InnerDim + inner];
+    float v1 = s + 1 * POOL_SIZE >= ReducedDim ? 0.0f : Xptr[outer * ReducedDim * InnerDim + (s + 1 * POOL_SIZE) * InnerDim + inner];
+    float v2 = s + 2 * POOL_SIZE >= ReducedDim ? 0.0f : Xptr[outer * ReducedDim * InnerDim + (s + 2 * POOL_SIZE) * InnerDim + inner];
+    float v3 = s + 3 * POOL_SIZE >= ReducedDim ? 0.0f : Xptr[outer * ReducedDim * InnerDim + (s + 3 * POOL_SIZE) * InnerDim + inner];
+    #endif
+
+    
+    LDS_AccumulationBuffer[gts] = rda_meanf(v0, rda_meanf(v1, rda_meanf(v2, v3)));
+
+    GroupMemoryBarrierWithGroupSync();
+
+    // sequential addressing
+    // mem = [x0...xn y0..yn]
+    //     = [x0+y0...xn+yn ...]
+    // last sum saved for last
+    // following code is unrolled:
+    // for s = (POOL_SIZE) / 2; s > 1; s >>= 1
+    ReduceMeanFloatInternalReduce(gts, 32);
+    ReduceMeanFloatInternalReduce(gts, 16);
+    ReduceMeanFloatInternalReduce(gts, 8);
+    ReduceMeanFloatInternalReduce(gts, 4);
+    ReduceMeanFloatInternalReduce(gts, 2);
+
+    if (gts == 0)
+    {
+        float accVal = rda_meanf(LDS_AccumulationBuffer[0], LDS_AccumulationBuffer[1]);
+#if defined(GLOBAL)
+        accVal = accVal * Normalization;
+        Optr[outer * InnerDim + inner] = accVal;
+#endif
+#if defined(PARTIAL)
+        Optr[outer * SpatialDimsO * InnerDim + gs * InnerDim + inner] = accVal;
+#endif
+    }
+}
+
+
+
+inline float rda_prodf(float v0, float v1)
+{
+    return v0 * v1;
+}
+
+
+inline void ReduceProdFloatInternalReduce(uint gtz, uint s)
+{
+    if (gtz < s)
+    {
+        float v0 = LDS_AccumulationBuffer[gtz];
+        float v1 = LDS_AccumulationBuffer[gtz + s];
+        float acc = rda_prodf(v0, v1);
+        LDS_AccumulationBuffer[gtz] = acc;
+    }
+    GroupMemoryBarrierWithGroupSync();
+}
+
+[numthreads(1, POOL_SIZE, 1)]
+void SUFFIX_REDUCEPRODFLOAT(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV_GroupThreadID, uint3 groupId : SV_GroupID)
+{
+    uint outer = dispatchThreadID.x;
+    uint inner = dispatchThreadID.z;
+
+    uint gts = groupThreadID.y;
+    uint gs = groupId.y;
+
+    // https://developer.download.nvidia.com/assets/cuda/files/reduction.pdf
+    // half the number of blocks (x and y) replaced with 4 loads
+    uint s = gs * POOL_SIZE * 4 + gts;
+
+    #if defined(SHADER_API_MOBILE)
+    float v0 = s + 0 * POOL_SIZE >= ReducedDim ? 1.0f : Xptr[outer * ReducedDim * InnerDim + min(s + 0 * POOL_SIZE, ReducedDim) * InnerDim + inner];
+    float v1 = s + 1 * POOL_SIZE >= ReducedDim ? 1.0f : Xptr[outer * ReducedDim * InnerDim + min(s + 1 * POOL_SIZE, ReducedDim) * InnerDim + inner];
+    float v2 = s + 2 * POOL_SIZE >= ReducedDim ? 1.0f : Xptr[outer * ReducedDim * InnerDim + min(s + 2 * POOL_SIZE, ReducedDim) * InnerDim + inner];
+    float v3 = s + 3 * POOL_SIZE >= ReducedDim ? 1.0f : Xptr[outer * ReducedDim * InnerDim + min(s + 3 * POOL_SIZE, ReducedDim) * InnerDim + inner];
+    #else
+    float v0 = s + 0 * POOL_SIZE >= ReducedDim ? 1.0f : Xptr[outer * ReducedDim * InnerDim + (s + 0 * POOL_SIZE) * InnerDim + inner];
+    float v1 = s + 1 * POOL_SIZE >= ReducedDim ? 1.0f : Xptr[outer * ReducedDim * InnerDim + (s + 1 * POOL_SIZE) * InnerDim + inner];
+    float v2 = s + 2 * POOL_SIZE >= ReducedDim ? 1.0f : Xptr[outer * ReducedDim * InnerDim + (s + 2 * POOL_SIZE) * InnerDim + inner];
+    float v3 = s + 3 * POOL_SIZE >= ReducedDim ? 1.0f : Xptr[outer * ReducedDim * InnerDim + (s + 3 * POOL_SIZE) * InnerDim + inner];
+    #endif
+
+    
+    LDS_AccumulationBuffer[gts] = rda_prodf(v0, rda_prodf(v1, rda_prodf(v2, v3)));
+
+    GroupMemoryBarrierWithGroupSync();
+
+    // sequential addressing
+    // mem = [x0...xn y0..yn]
+    //     = [x0+y0...xn+yn ...]
+    // last sum saved for last
+    // following code is unrolled:
+    // for s = (POOL_SIZE) / 2; s > 1; s >>= 1
+    ReduceProdFloatInternalReduce(gts, 32);
+    ReduceProdFloatInternalReduce(gts, 16);
+    ReduceProdFloatInternalReduce(gts, 8);
+    ReduceProdFloatInternalReduce(gts, 4);
+    ReduceProdFloatInternalReduce(gts, 2);
+
+    if (gts == 0)
+    {
+        float accVal = rda_prodf(LDS_AccumulationBuffer[0], LDS_AccumulationBuffer[1]);
+#if defined(GLOBAL)
+        accVal = accVal;
+        Optr[outer * InnerDim + inner] = accVal;
+#endif
+#if defined(PARTIAL)
+        Optr[outer * SpatialDimsO * InnerDim + gs * InnerDim + inner] = accVal;
+#endif
+    }
+}
+
+
+
+inline float rda_l1f(float v0, float v1)
+{
+    return v0 + v1;
+}
+
+        
+inline float rdi_l1f(float v)
+{
+    return abs(v);
+}
+
+inline void ReduceL1FloatInternalReduce(uint gtz, uint s)
+{
+    if (gtz < s)
+    {
+        float v0 = LDS_AccumulationBuffer[gtz];
+        float v1 = LDS_AccumulationBuffer[gtz + s];
+        float acc = rda_l1f(v0, v1);
+        LDS_AccumulationBuffer[gtz] = acc;
+    }
+    GroupMemoryBarrierWithGroupSync();
+}
+
+[numthreads(1, POOL_SIZE, 1)]
+void SUFFIX_REDUCEL1FLOAT(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV_GroupThreadID, uint3 groupId : SV_GroupID)
+{
+    uint outer = dispatchThreadID.x;
+    uint inner = dispatchThreadID.z;
+
+    uint gts = groupThreadID.y;
+    uint gs = groupId.y;
+
+    // https://developer.download.nvidia.com/assets/cuda/files/reduction.pdf
+    // half the number of blocks (x and y) replaced with 4 loads
+    uint s = gs * POOL_SIZE * 4 + gts;
+
+    #if defined(SHADER_API_MOBILE)
+    float v0 = s + 0 * POOL_SIZE >= ReducedDim ? 0.0f : Xptr[outer * ReducedDim * InnerDim + min(s + 0 * POOL_SIZE, ReducedDim) * InnerDim + inner];
+    float v1 = s + 1 * POOL_SIZE >= ReducedDim ? 0.0f : Xptr[outer * ReducedDim * InnerDim + min(s + 1 * POOL_SIZE, ReducedDim) * InnerDim + inner];
+    float v2 = s + 2 * POOL_SIZE >= ReducedDim ? 0.0f : Xptr[outer * ReducedDim * InnerDim + min(s + 2 * POOL_SIZE, ReducedDim) * InnerDim + inner];
+    float v3 = s + 3 * POOL_SIZE >= ReducedDim ? 0.0f : Xptr[outer * ReducedDim * InnerDim + min(s + 3 * POOL_SIZE, ReducedDim) * InnerDim + inner];
+    #else
+    float v0 = s + 0 * POOL_SIZE >= ReducedDim ? 0.0f : Xptr[outer * ReducedDim * InnerDim + (s + 0 * POOL_SIZE) * InnerDim + inner];
+    float v1 = s + 1 * POOL_SIZE >= ReducedDim ? 0.0f : Xptr[outer * ReducedDim * InnerDim + (s + 1 * POOL_SIZE) * InnerDim + inner];
+    float v2 = s + 2 * POOL_SIZE >= ReducedDim ? 0.0f : Xptr[outer * ReducedDim * InnerDim + (s + 2 * POOL_SIZE) * InnerDim + inner];
+    float v3 = s + 3 * POOL_SIZE >= ReducedDim ? 0.0f : Xptr[outer * ReducedDim * InnerDim + (s + 3 * POOL_SIZE) * InnerDim + inner];
+    #endif
+
+            
+    v0 = rdi_l1f(v0);
+    v1 = rdi_l1f(v1);
+    v2 = rdi_l1f(v2);
+    v3 = rdi_l1f(v3);
+
+    LDS_AccumulationBuffer[gts] = rda_l1f(v0, rda_l1f(v1, rda_l1f(v2, v3)));
+
+    GroupMemoryBarrierWithGroupSync();
+
+    // sequential addressing
+    // mem = [x0...xn y0..yn]
+    //     = [x0+y0...xn+yn ...]
+    // last sum saved for last
+    // following code is unrolled:
+    // for s = (POOL_SIZE) / 2; s > 1; s >>= 1
+    ReduceL1FloatInternalReduce(gts, 32);
+    ReduceL1FloatInternalReduce(gts, 16);
+    ReduceL1FloatInternalReduce(gts, 8);
+    ReduceL1FloatInternalReduce(gts, 4);
+    ReduceL1FloatInternalReduce(gts, 2);
+
+    if (gts == 0)
+    {
+        float accVal = rda_l1f(LDS_AccumulationBuffer[0], LDS_AccumulationBuffer[1]);
+#if defined(GLOBAL)
+        accVal = accVal;
+        Optr[outer * InnerDim + inner] = accVal;
+#endif
+#if defined(PARTIAL)
+        Optr[outer * SpatialDimsO * InnerDim + gs * InnerDim + inner] = accVal;
+#endif
+    }
+}
+
+
+
+inline float rda_l2f(float v0, float v1)
+{
+    return v0 + v1;
+}
+
+        
+inline float rdi_l2f(float v)
+{
+    return IsFirstDispatch ? v * v : v;
+}
+
+inline void ReduceL2FloatInternalReduce(uint gtz, uint s)
+{
+    if (gtz < s)
+    {
+        float v0 = LDS_AccumulationBuffer[gtz];
+        float v1 = LDS_AccumulationBuffer[gtz + s];
+        float acc = rda_l2f(v0, v1);
+        LDS_AccumulationBuffer[gtz] = acc;
+    }
+    GroupMemoryBarrierWithGroupSync();
+}
+
+[numthreads(1, POOL_SIZE, 1)]
+void SUFFIX_REDUCEL2FLOAT(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV_GroupThreadID, uint3 groupId : SV_GroupID)
+{
+    uint outer = dispatchThreadID.x;
+    uint inner = dispatchThreadID.z;
+
+    uint gts = groupThreadID.y;
+    uint gs = groupId.y;
+
+    // https://developer.download.nvidia.com/assets/cuda/files/reduction.pdf
+    // half the number of blocks (x and y) replaced with 4 loads
+    uint s = gs * POOL_SIZE * 4 + gts;
+
+    #if defined(SHADER_API_MOBILE)
+    float v0 = s + 0 * POOL_SIZE >= ReducedDim ? 0.0f : Xptr[outer * ReducedDim * InnerDim + min(s + 0 * POOL_SIZE, ReducedDim) * InnerDim + inner];
+    float v1 = s + 1 * POOL_SIZE >= ReducedDim ? 0.0f : Xptr[outer * ReducedDim * InnerDim + min(s + 1 * POOL_SIZE, ReducedDim) * InnerDim + inner];
+    float v2 = s + 2 * POOL_SIZE >= ReducedDim ? 0.0f : Xptr[outer * ReducedDim * InnerDim + min(s + 2 * POOL_SIZE, ReducedDim) * InnerDim + inner];
+    float v3 = s + 3 * POOL_SIZE >= ReducedDim ? 0.0f : Xptr[outer * ReducedDim * InnerDim + min(s + 3 * POOL_SIZE, ReducedDim) * InnerDim + inner];
+    #else
+    float v0 = s + 0 * POOL_SIZE >= ReducedDim ? 0.0f : Xptr[outer * ReducedDim * InnerDim + (s + 0 * POOL_SIZE) * InnerDim + inner];
+    float v1 = s + 1 * POOL_SIZE >= ReducedDim ? 0.0f : Xptr[outer * ReducedDim * InnerDim + (s + 1 * POOL_SIZE) * InnerDim + inner];
+    float v2 = s + 2 * POOL_SIZE >= ReducedDim ? 0.0f : Xptr[outer * ReducedDim * InnerDim + (s + 2 * POOL_SIZE) * InnerDim + inner];
+    float v3 = s + 3 * POOL_SIZE >= ReducedDim ? 0.0f : Xptr[outer * ReducedDim * InnerDim + (s + 3 * POOL_SIZE) * InnerDim + inner];
+    #endif
+
+            
+    v0 = rdi_l2f(v0);
+    v1 = rdi_l2f(v1);
+    v2 = rdi_l2f(v2);
+    v3 = rdi_l2f(v3);
+
+    LDS_AccumulationBuffer[gts] = rda_l2f(v0, rda_l2f(v1, rda_l2f(v2, v3)));
+
+    GroupMemoryBarrierWithGroupSync();
+
+    // sequential addressing
+    // mem = [x0...xn y0..yn]
+    //     = [x0+y0...xn+yn ...]
+    // last sum saved for last
+    // following code is unrolled:
+    // for s = (POOL_SIZE) / 2; s > 1; s >>= 1
+    ReduceL2FloatInternalReduce(gts, 32);
+    ReduceL2FloatInternalReduce(gts, 16);
+    ReduceL2FloatInternalReduce(gts, 8);
+    ReduceL2FloatInternalReduce(gts, 4);
+    ReduceL2FloatInternalReduce(gts, 2);
+
+    if (gts == 0)
+    {
+        float accVal = rda_l2f(LDS_AccumulationBuffer[0], LDS_AccumulationBuffer[1]);
+#if defined(GLOBAL)
+        accVal = sqrt(accVal);
+        Optr[outer * InnerDim + inner] = accVal;
+#endif
+#if defined(PARTIAL)
+        Optr[outer * SpatialDimsO * InnerDim + gs * InnerDim + inner] = accVal;
+#endif
+    }
+}
+
+
+
+inline float rda_sqrtf(float v0, float v1)
+{
+    return v0 + v1;
+}
+
+
+inline void ReduceSqrtFloatInternalReduce(uint gtz, uint s)
+{
+    if (gtz < s)
+    {
+        float v0 = LDS_AccumulationBuffer[gtz];
+        float v1 = LDS_AccumulationBuffer[gtz + s];
+        float acc = rda_sqrtf(v0, v1);
+        LDS_AccumulationBuffer[gtz] = acc;
+    }
+    GroupMemoryBarrierWithGroupSync();
+}
+
+[numthreads(1, POOL_SIZE, 1)]
+void SUFFIX_REDUCESQRTFLOAT(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV_GroupThreadID, uint3 groupId : SV_GroupID)
+{
+    uint outer = dispatchThreadID.x;
+    uint inner = dispatchThreadID.z;
+
+    uint gts = groupThreadID.y;
+    uint gs = groupId.y;
+
+    // https://developer.download.nvidia.com/assets/cuda/files/reduction.pdf
+    // half the number of blocks (x and y) replaced with 4 loads
+    uint s = gs * POOL_SIZE * 4 + gts;
+
+    #if defined(SHADER_API_MOBILE)
+    float v0 = s + 0 * POOL_SIZE >= ReducedDim ? 0.0f : Xptr[outer * ReducedDim * InnerDim + min(s + 0 * POOL_SIZE, ReducedDim) * InnerDim + inner];
+    float v1 = s + 1 * POOL_SIZE >= ReducedDim ? 0.0f : Xptr[outer * ReducedDim * InnerDim + min(s + 1 * POOL_SIZE, ReducedDim) * InnerDim + inner];
+    float v2 = s + 2 * POOL_SIZE >= ReducedDim ? 0.0f : Xptr[outer * ReducedDim * InnerDim + min(s + 2 * POOL_SIZE, ReducedDim) * InnerDim + inner];
+    float v3 = s + 3 * POOL_SIZE >= ReducedDim ? 0.0f : Xptr[outer * ReducedDim * InnerDim + min(s + 3 * POOL_SIZE, ReducedDim) * InnerDim + inner];
+    #else
+    float v0 = s + 0 * POOL_SIZE >= ReducedDim ? 0.0f : Xptr[outer * ReducedDim * InnerDim + (s + 0 * POOL_SIZE) * InnerDim + inner];
+    float v1 = s + 1 * POOL_SIZE >= ReducedDim ? 0.0f : Xptr[outer * ReducedDim * InnerDim + (s + 1 * POOL_SIZE) * InnerDim + inner];
+    float v2 = s + 2 * POOL_SIZE >= ReducedDim ? 0.0f : Xptr[outer * ReducedDim * InnerDim + (s + 2 * POOL_SIZE) * InnerDim + inner];
+    float v3 = s + 3 * POOL_SIZE >= ReducedDim ? 0.0f : Xptr[outer * ReducedDim * InnerDim + (s + 3 * POOL_SIZE) * InnerDim + inner];
+    #endif
+
+    
+    LDS_AccumulationBuffer[gts] = rda_sqrtf(v0, rda_sqrtf(v1, rda_sqrtf(v2, v3)));
+
+    GroupMemoryBarrierWithGroupSync();
+
+    // sequential addressing
+    // mem = [x0...xn y0..yn]
+    //     = [x0+y0...xn+yn ...]
+    // last sum saved for last
+    // following code is unrolled:
+    // for s = (POOL_SIZE) / 2; s > 1; s >>= 1
+    ReduceSqrtFloatInternalReduce(gts, 32);
+    ReduceSqrtFloatInternalReduce(gts, 16);
+    ReduceSqrtFloatInternalReduce(gts, 8);
+    ReduceSqrtFloatInternalReduce(gts, 4);
+    ReduceSqrtFloatInternalReduce(gts, 2);
+
+    if (gts == 0)
+    {
+        float accVal = rda_sqrtf(LDS_AccumulationBuffer[0], LDS_AccumulationBuffer[1]);
+#if defined(GLOBAL)
+        accVal = sqrt(accVal);
+        Optr[outer * InnerDim + inner] = accVal;
+#endif
+#if defined(PARTIAL)
+        Optr[outer * SpatialDimsO * InnerDim + gs * InnerDim + inner] = accVal;
+#endif
+    }
+}
+
+
+
+inline float rda_logsumf(float v0, float v1)
+{
+    return v0 + v1;
+}
+
+
+inline void ReduceLogSumFloatInternalReduce(uint gtz, uint s)
+{
+    if (gtz < s)
+    {
+        float v0 = LDS_AccumulationBuffer[gtz];
+        float v1 = LDS_AccumulationBuffer[gtz + s];
+        float acc = rda_logsumf(v0, v1);
+        LDS_AccumulationBuffer[gtz] = acc;
+    }
+    GroupMemoryBarrierWithGroupSync();
+}
+
+[numthreads(1, POOL_SIZE, 1)]
+void SUFFIX_REDUCELOGSUMFLOAT(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV_GroupThreadID, uint3 groupId : SV_GroupID)
+{
+    uint outer = dispatchThreadID.x;
+    uint inner = dispatchThreadID.z;
+
+    uint gts = groupThreadID.y;
+    uint gs = groupId.y;
+
+    // https://developer.download.nvidia.com/assets/cuda/files/reduction.pdf
+    // half the number of blocks (x and y) replaced with 4 loads
+    uint s = gs * POOL_SIZE * 4 + gts;
+
+    #if defined(SHADER_API_MOBILE)
+    float v0 = s + 0 * POOL_SIZE >= ReducedDim ? 0.0f : Xptr[outer * ReducedDim * InnerDim + min(s + 0 * POOL_SIZE, ReducedDim) * InnerDim + inner];
+    float v1 = s + 1 * POOL_SIZE >= ReducedDim ? 0.0f : Xptr[outer * ReducedDim * InnerDim + min(s + 1 * POOL_SIZE, ReducedDim) * InnerDim + inner];
+    float v2 = s + 2 * POOL_SIZE >= ReducedDim ? 0.0f : Xptr[outer * ReducedDim * InnerDim + min(s + 2 * POOL_SIZE, ReducedDim) * InnerDim + inner];
+    float v3 = s + 3 * POOL_SIZE >= ReducedDim ? 0.0f : Xptr[outer * ReducedDim * InnerDim + min(s + 3 * POOL_SIZE, ReducedDim) * InnerDim + inner];
+    #else
+    float v0 = s + 0 * POOL_SIZE >= ReducedDim ? 0.0f : Xptr[outer * ReducedDim * InnerDim + (s + 0 * POOL_SIZE) * InnerDim + inner];
+    float v1 = s + 1 * POOL_SIZE >= ReducedDim ? 0.0f : Xptr[outer * ReducedDim * InnerDim + (s + 1 * POOL_SIZE) * InnerDim + inner];
+    float v2 = s + 2 * POOL_SIZE >= ReducedDim ? 0.0f : Xptr[outer * ReducedDim * InnerDim + (s + 2 * POOL_SIZE) * InnerDim + inner];
+    float v3 = s + 3 * POOL_SIZE >= ReducedDim ? 0.0f : Xptr[outer * ReducedDim * InnerDim + (s + 3 * POOL_SIZE) * InnerDim + inner];
+    #endif
+
+    
+    LDS_AccumulationBuffer[gts] = rda_logsumf(v0, rda_logsumf(v1, rda_logsumf(v2, v3)));
+
+    GroupMemoryBarrierWithGroupSync();
+
+    // sequential addressing
+    // mem = [x0...xn y0..yn]
+    //     = [x0+y0...xn+yn ...]
+    // last sum saved for last
+    // following code is unrolled:
+    // for s = (POOL_SIZE) / 2; s > 1; s >>= 1
+    ReduceLogSumFloatInternalReduce(gts, 32);
+    ReduceLogSumFloatInternalReduce(gts, 16);
+    ReduceLogSumFloatInternalReduce(gts, 8);
+    ReduceLogSumFloatInternalReduce(gts, 4);
+    ReduceLogSumFloatInternalReduce(gts, 2);
+
+    if (gts == 0)
+    {
+        float accVal = rda_logsumf(LDS_AccumulationBuffer[0], LDS_AccumulationBuffer[1]);
+#if defined(GLOBAL)
+        accVal = log(accVal);
+        Optr[outer * InnerDim + inner] = accVal;
+#endif
+#if defined(PARTIAL)
+        Optr[outer * SpatialDimsO * InnerDim + gs * InnerDim + inner] = accVal;
+#endif
+    }
+}
+
+
+
+inline float rda_logsumexpf(float v0, float v1)
+{
+    return v0 + v1;
+}
+
+
+inline void ReduceLogSumExpFloatInternalReduce(uint gtz, uint s)
+{
+    if (gtz < s)
+    {
+        float v0 = LDS_AccumulationBuffer[gtz];
+        float v1 = LDS_AccumulationBuffer[gtz + s];
+        float acc = rda_logsumexpf(v0, v1);
+        LDS_AccumulationBuffer[gtz] = acc;
+    }
+    GroupMemoryBarrierWithGroupSync();
+}
+
+[numthreads(1, POOL_SIZE, 1)]
+void SUFFIX_REDUCELOGSUMEXPFLOAT(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV_GroupThreadID, uint3 groupId : SV_GroupID)
+{
+    uint outer = dispatchThreadID.x;
+    uint inner = dispatchThreadID.z;
+
+    uint gts = groupThreadID.y;
+    uint gs = groupId.y;
+
+    // https://developer.download.nvidia.com/assets/cuda/files/reduction.pdf
+    // half the number of blocks (x and y) replaced with 4 loads
+    uint s = gs * POOL_SIZE * 4 + gts;
+
+    float maxV = Bptr[outer * InnerDim + inner];
+
+    GroupMemoryBarrierWithGroupSync();
+
+    float v0, v1, v2, v3;
+    if (IsFirstDispatch)
+    {
+        #if defined(SHADER_API_MOBILE)
+        v0 = s + 0 * POOL_SIZE >= ReducedDim ? 0.0f : exp(Xptr[outer * ReducedDim * InnerDim + min(s + 0 * POOL_SIZE, ReducedDim) * InnerDim + inner] - maxV);
+        v1 = s + 1 * POOL_SIZE >= ReducedDim ? 0.0f : exp(Xptr[outer * ReducedDim * InnerDim + min(s + 1 * POOL_SIZE, ReducedDim) * InnerDim + inner] - maxV);
+        v2 = s + 2 * POOL_SIZE >= ReducedDim ? 0.0f : exp(Xptr[outer * ReducedDim * InnerDim + min(s + 2 * POOL_SIZE, ReducedDim) * InnerDim + inner] - maxV);
+        v3 = s + 3 * POOL_SIZE >= ReducedDim ? 0.0f : exp(Xptr[outer * ReducedDim * InnerDim + min(s + 3 * POOL_SIZE, ReducedDim) * InnerDim + inner] - maxV);
+        #else
+        v0 = s + 0 * POOL_SIZE >= ReducedDim ? 0.0f : exp(Xptr[outer * ReducedDim * InnerDim + (s + 0 * POOL_SIZE) * InnerDim + inner] - maxV);
+        v1 = s + 1 * POOL_SIZE >= ReducedDim ? 0.0f : exp(Xptr[outer * ReducedDim * InnerDim + (s + 1 * POOL_SIZE) * InnerDim + inner] - maxV);
+        v2 = s + 2 * POOL_SIZE >= ReducedDim ? 0.0f : exp(Xptr[outer * ReducedDim * InnerDim + (s + 2 * POOL_SIZE) * InnerDim + inner] - maxV);
+        v3 = s + 3 * POOL_SIZE >= ReducedDim ? 0.0f : exp(Xptr[outer * ReducedDim * InnerDim + (s + 3 * POOL_SIZE) * InnerDim + inner] - maxV);
+        #endif
+    }
+    else
+    {
+        #if defined(SHADER_API_MOBILE)
+        v0 = s + 0 * POOL_SIZE >= ReducedDim ? 0.0f : Xptr[outer * ReducedDim * InnerDim + min(s + 0 * POOL_SIZE, ReducedDim) * InnerDim + inner];
+        v1 = s + 1 * POOL_SIZE >= ReducedDim ? 0.0f : Xptr[outer * ReducedDim * InnerDim + min(s + 1 * POOL_SIZE, ReducedDim) * InnerDim + inner];
+        v2 = s + 2 * POOL_SIZE >= ReducedDim ? 0.0f : Xptr[outer * ReducedDim * InnerDim + min(s + 2 * POOL_SIZE, ReducedDim) * InnerDim + inner];
+        v3 = s + 3 * POOL_SIZE >= ReducedDim ? 0.0f : Xptr[outer * ReducedDim * InnerDim + min(s + 3 * POOL_SIZE, ReducedDim) * InnerDim + inner];
+        #else
+        v0 = s + 0 * POOL_SIZE >= ReducedDim ? 0.0f : Xptr[outer * ReducedDim * InnerDim + (s + 0 * POOL_SIZE) * InnerDim + inner];
+        v1 = s + 1 * POOL_SIZE >= ReducedDim ? 0.0f : Xptr[outer * ReducedDim * InnerDim + (s + 1 * POOL_SIZE) * InnerDim + inner];
+        v2 = s + 2 * POOL_SIZE >= ReducedDim ? 0.0f : Xptr[outer * ReducedDim * InnerDim + (s + 2 * POOL_SIZE) * InnerDim + inner];
+        v3 = s + 3 * POOL_SIZE >= ReducedDim ? 0.0f : Xptr[outer * ReducedDim * InnerDim + (s + 3 * POOL_SIZE) * InnerDim + inner];
+        #endif
+    }
+
+    
+    LDS_AccumulationBuffer[gts] = rda_logsumexpf(v0, rda_logsumexpf(v1, rda_logsumexpf(v2, v3)));
+
+    GroupMemoryBarrierWithGroupSync();
+
+    // sequential addressing
+    // mem = [x0...xn y0..yn]
+    //     = [x0+y0...xn+yn ...]
+    // last sum saved for last
+    // following code is unrolled:
+    // for s = (POOL_SIZE) / 2; s > 1; s >>= 1
+    ReduceLogSumExpFloatInternalReduce(gts, 32);
+    ReduceLogSumExpFloatInternalReduce(gts, 16);
+    ReduceLogSumExpFloatInternalReduce(gts, 8);
+    ReduceLogSumExpFloatInternalReduce(gts, 4);
+    ReduceLogSumExpFloatInternalReduce(gts, 2);
+
+    if (gts == 0)
+    {
+        float accVal = rda_logsumexpf(LDS_AccumulationBuffer[0], LDS_AccumulationBuffer[1]);
+#if defined(GLOBAL)
+        accVal = log(accVal) + maxV;
+        Optr[outer * InnerDim + inner] = accVal;
+#endif
+#if defined(PARTIAL)
+        Optr[outer * SpatialDimsO * InnerDim + gs * InnerDim + inner] = accVal;
+#endif
+    }
+}
+
+
+
+inline float rda_sumexpf(float v0, float v1)
+{
+    return v0 + v1;
+}
+
+
+inline void ReduceSumExpFloatInternalReduce(uint gtz, uint s)
+{
+    if (gtz < s)
+    {
+        float v0 = LDS_AccumulationBuffer[gtz];
+        float v1 = LDS_AccumulationBuffer[gtz + s];
+        float acc = rda_sumexpf(v0, v1);
+        LDS_AccumulationBuffer[gtz] = acc;
+    }
+    GroupMemoryBarrierWithGroupSync();
+}
+
+[numthreads(1, POOL_SIZE, 1)]
+void SUFFIX_REDUCESUMEXPFLOAT(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV_GroupThreadID, uint3 groupId : SV_GroupID)
+{
+    uint outer = dispatchThreadID.x;
+    uint inner = dispatchThreadID.z;
+
+    uint gts = groupThreadID.y;
+    uint gs = groupId.y;
+
+    // https://developer.download.nvidia.com/assets/cuda/files/reduction.pdf
+    // half the number of blocks (x and y) replaced with 4 loads
+    uint s = gs * POOL_SIZE * 4 + gts;
+
+    float maxV = Bptr[outer * InnerDim + inner];
+
+    GroupMemoryBarrierWithGroupSync();
+
+    float v0, v1, v2, v3;
+    if (IsFirstDispatch)
+    {
+        #if defined(SHADER_API_MOBILE)
+        v0 = s + 0 * POOL_SIZE >= ReducedDim ? 0.0f : exp(Xptr[outer * ReducedDim * InnerDim + min(s + 0 * POOL_SIZE, ReducedDim) * InnerDim + inner] - maxV);
+        v1 = s + 1 * POOL_SIZE >= ReducedDim ? 0.0f : exp(Xptr[outer * ReducedDim * InnerDim + min(s + 1 * POOL_SIZE, ReducedDim) * InnerDim + inner] - maxV);
+        v2 = s + 2 * POOL_SIZE >= ReducedDim ? 0.0f : exp(Xptr[outer * ReducedDim * InnerDim + min(s + 2 * POOL_SIZE, ReducedDim) * InnerDim + inner] - maxV);
+        v3 = s + 3 * POOL_SIZE >= ReducedDim ? 0.0f : exp(Xptr[outer * ReducedDim * InnerDim + min(s + 3 * POOL_SIZE, ReducedDim) * InnerDim + inner] - maxV);
+        #else
+        v0 = s + 0 * POOL_SIZE >= ReducedDim ? 0.0f : exp(Xptr[outer * ReducedDim * InnerDim + (s + 0 * POOL_SIZE) * InnerDim + inner] - maxV);
+        v1 = s + 1 * POOL_SIZE >= ReducedDim ? 0.0f : exp(Xptr[outer * ReducedDim * InnerDim + (s + 1 * POOL_SIZE) * InnerDim + inner] - maxV);
+        v2 = s + 2 * POOL_SIZE >= ReducedDim ? 0.0f : exp(Xptr[outer * ReducedDim * InnerDim + (s + 2 * POOL_SIZE) * InnerDim + inner] - maxV);
+        v3 = s + 3 * POOL_SIZE >= ReducedDim ? 0.0f : exp(Xptr[outer * ReducedDim * InnerDim + (s + 3 * POOL_SIZE) * InnerDim + inner] - maxV);
+        #endif
+    }
+    else
+    {
+        #if defined(SHADER_API_MOBILE)
+        v0 = s + 0 * POOL_SIZE >= ReducedDim ? 0.0f : Xptr[outer * ReducedDim * InnerDim + min(s + 0 * POOL_SIZE, ReducedDim) * InnerDim + inner];
+        v1 = s + 1 * POOL_SIZE >= ReducedDim ? 0.0f : Xptr[outer * ReducedDim * InnerDim + min(s + 1 * POOL_SIZE, ReducedDim) * InnerDim + inner];
+        v2 = s + 2 * POOL_SIZE >= ReducedDim ? 0.0f : Xptr[outer * ReducedDim * InnerDim + min(s + 2 * POOL_SIZE, ReducedDim) * InnerDim + inner];
+        v3 = s + 3 * POOL_SIZE >= ReducedDim ? 0.0f : Xptr[outer * ReducedDim * InnerDim + min(s + 3 * POOL_SIZE, ReducedDim) * InnerDim + inner];
+        #else
+        v0 = s + 0 * POOL_SIZE >= ReducedDim ? 0.0f : Xptr[outer * ReducedDim * InnerDim + (s + 0 * POOL_SIZE) * InnerDim + inner];
+        v1 = s + 1 * POOL_SIZE >= ReducedDim ? 0.0f : Xptr[outer * ReducedDim * InnerDim + (s + 1 * POOL_SIZE) * InnerDim + inner];
+        v2 = s + 2 * POOL_SIZE >= ReducedDim ? 0.0f : Xptr[outer * ReducedDim * InnerDim + (s + 2 * POOL_SIZE) * InnerDim + inner];
+        v3 = s + 3 * POOL_SIZE >= ReducedDim ? 0.0f : Xptr[outer * ReducedDim * InnerDim + (s + 3 * POOL_SIZE) * InnerDim + inner];
+        #endif
+    }
+
+    
+    LDS_AccumulationBuffer[gts] = rda_sumexpf(v0, rda_sumexpf(v1, rda_sumexpf(v2, v3)));
+
+    GroupMemoryBarrierWithGroupSync();
+
+    // sequential addressing
+    // mem = [x0...xn y0..yn]
+    //     = [x0+y0...xn+yn ...]
+    // last sum saved for last
+    // following code is unrolled:
+    // for s = (POOL_SIZE) / 2; s > 1; s >>= 1
+    ReduceSumExpFloatInternalReduce(gts, 32);
+    ReduceSumExpFloatInternalReduce(gts, 16);
+    ReduceSumExpFloatInternalReduce(gts, 8);
+    ReduceSumExpFloatInternalReduce(gts, 4);
+    ReduceSumExpFloatInternalReduce(gts, 2);
+
+    if (gts == 0)
+    {
+        float accVal = rda_sumexpf(LDS_AccumulationBuffer[0], LDS_AccumulationBuffer[1]);
+#if defined(GLOBAL)
+        accVal = accVal;
+        Optr[outer * InnerDim + inner] = accVal;
+#endif
+#if defined(PARTIAL)
+        Optr[outer * SpatialDimsO * InnerDim + gs * InnerDim + inner] = accVal;
+#endif
+    }
+}
+
+
+
+inline int rda_maxi(int v0, int v1)
+{
+    return max(v0, v1);
+}
+
+
+inline void ReduceMaxIntInternalReduce(uint gtz, uint s)
+{
+    if (gtz < s)
+    {
+        int v0 = LDS_AccumulationBuffer[gtz];
+        int v1 = LDS_AccumulationBuffer[gtz + s];
+        int acc = rda_maxi(v0, v1);
+        LDS_AccumulationBuffer[gtz] = acc;
+    }
+    GroupMemoryBarrierWithGroupSync();
+}
+
+[numthreads(1, POOL_SIZE, 1)]
+void SUFFIX_REDUCEMAXINT(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV_GroupThreadID, uint3 groupId : SV_GroupID)
+{
+    uint outer = dispatchThreadID.x;
+    uint inner = dispatchThreadID.z;
+
+    uint gts = groupThreadID.y;
+    uint gs = groupId.y;
+
+    // https://developer.download.nvidia.com/assets/cuda/files/reduction.pdf
+    // half the number of blocks (x and y) replaced with 4 loads
+    uint s = gs * POOL_SIZE * 4 + gts;
+
+    #if defined(SHADER_API_MOBILE)
+    int v0 = s + 0 * POOL_SIZE >= ReducedDim ? INT_MIN : Xptr[outer * ReducedDim * InnerDim + min(s + 0 * POOL_SIZE, ReducedDim) * InnerDim + inner];
+    int v1 = s + 1 * POOL_SIZE >= ReducedDim ? INT_MIN : Xptr[outer * ReducedDim * InnerDim + min(s + 1 * POOL_SIZE, ReducedDim) * InnerDim + inner];
+    int v2 = s + 2 * POOL_SIZE >= ReducedDim ? INT_MIN : Xptr[outer * ReducedDim * InnerDim + min(s + 2 * POOL_SIZE, ReducedDim) * InnerDim + inner];
+    int v3 = s + 3 * POOL_SIZE >= ReducedDim ? INT_MIN : Xptr[outer * ReducedDim * InnerDim + min(s + 3 * POOL_SIZE, ReducedDim) * InnerDim + inner];
+    #else
+    int v0 = s + 0 * POOL_SIZE >= ReducedDim ? INT_MIN : Xptr[outer * ReducedDim * InnerDim + (s + 0 * POOL_SIZE) * InnerDim + inner];
+    int v1 = s + 1 * POOL_SIZE >= ReducedDim ? INT_MIN : Xptr[outer * ReducedDim * InnerDim + (s + 1 * POOL_SIZE) * InnerDim + inner];
+    int v2 = s + 2 * POOL_SIZE >= ReducedDim ? INT_MIN : Xptr[outer * ReducedDim * InnerDim + (s + 2 * POOL_SIZE) * InnerDim + inner];
+    int v3 = s + 3 * POOL_SIZE >= ReducedDim ? INT_MIN : Xptr[outer * ReducedDim * InnerDim + (s + 3 * POOL_SIZE) * InnerDim + inner];
+    #endif
+
+    
+    LDS_AccumulationBuffer[gts] = rda_maxi(v0, rda_maxi(v1, rda_maxi(v2, v3)));
+
+    GroupMemoryBarrierWithGroupSync();
+
+    // sequential addressing
+    // mem = [x0...xn y0..yn]
+    //     = [x0+y0...xn+yn ...]
+    // last sum saved for last
+    // following code is unrolled:
+    // for s = (POOL_SIZE) / 2; s > 1; s >>= 1
+    ReduceMaxIntInternalReduce(gts, 32);
+    ReduceMaxIntInternalReduce(gts, 16);
+    ReduceMaxIntInternalReduce(gts, 8);
+    ReduceMaxIntInternalReduce(gts, 4);
+    ReduceMaxIntInternalReduce(gts, 2);
+
+    if (gts == 0)
+    {
+        float accVal = rda_maxi(LDS_AccumulationBuffer[0], LDS_AccumulationBuffer[1]);
+#if defined(GLOBAL)
+        accVal = accVal;
+        Optr[outer * InnerDim + inner] = accVal;
+#endif
+#if defined(PARTIAL)
+        Optr[outer * SpatialDimsO * InnerDim + gs * InnerDim + inner] = accVal;
+#endif
+    }
+}
+
+
+
+inline int rda_mini(int v0, int v1)
+{
+    return min(v0, v1);
+}
+
+
+inline void ReduceMinIntInternalReduce(uint gtz, uint s)
+{
+    if (gtz < s)
+    {
+        int v0 = LDS_AccumulationBuffer[gtz];
+        int v1 = LDS_AccumulationBuffer[gtz + s];
+        int acc = rda_mini(v0, v1);
+        LDS_AccumulationBuffer[gtz] = acc;
+    }
+    GroupMemoryBarrierWithGroupSync();
+}
+
+[numthreads(1, POOL_SIZE, 1)]
+void SUFFIX_REDUCEMININT(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV_GroupThreadID, uint3 groupId : SV_GroupID)
+{
+    uint outer = dispatchThreadID.x;
+    uint inner = dispatchThreadID.z;
+
+    uint gts = groupThreadID.y;
+    uint gs = groupId.y;
+
+    // https://developer.download.nvidia.com/assets/cuda/files/reduction.pdf
+    // half the number of blocks (x and y) replaced with 4 loads
+    uint s = gs * POOL_SIZE * 4 + gts;
+
+    #if defined(SHADER_API_MOBILE)
+    int v0 = s + 0 * POOL_SIZE >= ReducedDim ? INT_MAX : Xptr[outer * ReducedDim * InnerDim + min(s + 0 * POOL_SIZE, ReducedDim) * InnerDim + inner];
+    int v1 = s + 1 * POOL_SIZE >= ReducedDim ? INT_MAX : Xptr[outer * ReducedDim * InnerDim + min(s + 1 * POOL_SIZE, ReducedDim) * InnerDim + inner];
+    int v2 = s + 2 * POOL_SIZE >= ReducedDim ? INT_MAX : Xptr[outer * ReducedDim * InnerDim + min(s + 2 * POOL_SIZE, ReducedDim) * InnerDim + inner];
+    int v3 = s + 3 * POOL_SIZE >= ReducedDim ? INT_MAX : Xptr[outer * ReducedDim * InnerDim + min(s + 3 * POOL_SIZE, ReducedDim) * InnerDim + inner];
+    #else
+    int v0 = s + 0 * POOL_SIZE >= ReducedDim ? INT_MAX : Xptr[outer * ReducedDim * InnerDim + (s + 0 * POOL_SIZE) * InnerDim + inner];
+    int v1 = s + 1 * POOL_SIZE >= ReducedDim ? INT_MAX : Xptr[outer * ReducedDim * InnerDim + (s + 1 * POOL_SIZE) * InnerDim + inner];
+    int v2 = s + 2 * POOL_SIZE >= ReducedDim ? INT_MAX : Xptr[outer * ReducedDim * InnerDim + (s + 2 * POOL_SIZE) * InnerDim + inner];
+    int v3 = s + 3 * POOL_SIZE >= ReducedDim ? INT_MAX : Xptr[outer * ReducedDim * InnerDim + (s + 3 * POOL_SIZE) * InnerDim + inner];
+    #endif
+
+    
+    LDS_AccumulationBuffer[gts] = rda_mini(v0, rda_mini(v1, rda_mini(v2, v3)));
+
+    GroupMemoryBarrierWithGroupSync();
+
+    // sequential addressing
+    // mem = [x0...xn y0..yn]
+    //     = [x0+y0...xn+yn ...]
+    // last sum saved for last
+    // following code is unrolled:
+    // for s = (POOL_SIZE) / 2; s > 1; s >>= 1
+    ReduceMinIntInternalReduce(gts, 32);
+    ReduceMinIntInternalReduce(gts, 16);
+    ReduceMinIntInternalReduce(gts, 8);
+    ReduceMinIntInternalReduce(gts, 4);
+    ReduceMinIntInternalReduce(gts, 2);
+
+    if (gts == 0)
+    {
+        float accVal = rda_mini(LDS_AccumulationBuffer[0], LDS_AccumulationBuffer[1]);
+#if defined(GLOBAL)
+        accVal = accVal;
+        Optr[outer * InnerDim + inner] = accVal;
+#endif
+#if defined(PARTIAL)
+        Optr[outer * SpatialDimsO * InnerDim + gs * InnerDim + inner] = accVal;
+#endif
+    }
+}
+
+
+
+inline int rda_sumi(int v0, int v1)
+{
+    return v0 + v1;
+}
+
+
+inline void ReduceSumIntInternalReduce(uint gtz, uint s)
+{
+    if (gtz < s)
+    {
+        int v0 = LDS_AccumulationBuffer[gtz];
+        int v1 = LDS_AccumulationBuffer[gtz + s];
+        int acc = rda_sumi(v0, v1);
+        LDS_AccumulationBuffer[gtz] = acc;
+    }
+    GroupMemoryBarrierWithGroupSync();
+}
+
+[numthreads(1, POOL_SIZE, 1)]
+void SUFFIX_REDUCESUMINT(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV_GroupThreadID, uint3 groupId : SV_GroupID)
+{
+    uint outer = dispatchThreadID.x;
+    uint inner = dispatchThreadID.z;
+
+    uint gts = groupThreadID.y;
+    uint gs = groupId.y;
+
+    // https://developer.download.nvidia.com/assets/cuda/files/reduction.pdf
+    // half the number of blocks (x and y) replaced with 4 loads
+    uint s = gs * POOL_SIZE * 4 + gts;
+
+    #if defined(SHADER_API_MOBILE)
+    int v0 = s + 0 * POOL_SIZE >= ReducedDim ? 0 : Xptr[outer * ReducedDim * InnerDim + min(s + 0 * POOL_SIZE, ReducedDim) * InnerDim + inner];
+    int v1 = s + 1 * POOL_SIZE >= ReducedDim ? 0 : Xptr[outer * ReducedDim * InnerDim + min(s + 1 * POOL_SIZE, ReducedDim) * InnerDim + inner];
+    int v2 = s + 2 * POOL_SIZE >= ReducedDim ? 0 : Xptr[outer * ReducedDim * InnerDim + min(s + 2 * POOL_SIZE, ReducedDim) * InnerDim + inner];
+    int v3 = s + 3 * POOL_SIZE >= ReducedDim ? 0 : Xptr[outer * ReducedDim * InnerDim + min(s + 3 * POOL_SIZE, ReducedDim) * InnerDim + inner];
+    #else
+    int v0 = s + 0 * POOL_SIZE >= ReducedDim ? 0 : Xptr[outer * ReducedDim * InnerDim + (s + 0 * POOL_SIZE) * InnerDim + inner];
+    int v1 = s + 1 * POOL_SIZE >= ReducedDim ? 0 : Xptr[outer * ReducedDim * InnerDim + (s + 1 * POOL_SIZE) * InnerDim + inner];
+    int v2 = s + 2 * POOL_SIZE >= ReducedDim ? 0 : Xptr[outer * ReducedDim * InnerDim + (s + 2 * POOL_SIZE) * InnerDim + inner];
+    int v3 = s + 3 * POOL_SIZE >= ReducedDim ? 0 : Xptr[outer * ReducedDim * InnerDim + (s + 3 * POOL_SIZE) * InnerDim + inner];
+    #endif
+
+    
+    LDS_AccumulationBuffer[gts] = rda_sumi(v0, rda_sumi(v1, rda_sumi(v2, v3)));
+
+    GroupMemoryBarrierWithGroupSync();
+
+    // sequential addressing
+    // mem = [x0...xn y0..yn]
+    //     = [x0+y0...xn+yn ...]
+    // last sum saved for last
+    // following code is unrolled:
+    // for s = (POOL_SIZE) / 2; s > 1; s >>= 1
+    ReduceSumIntInternalReduce(gts, 32);
+    ReduceSumIntInternalReduce(gts, 16);
+    ReduceSumIntInternalReduce(gts, 8);
+    ReduceSumIntInternalReduce(gts, 4);
+    ReduceSumIntInternalReduce(gts, 2);
+
+    if (gts == 0)
+    {
+        float accVal = rda_sumi(LDS_AccumulationBuffer[0], LDS_AccumulationBuffer[1]);
+#if defined(GLOBAL)
+        accVal = accVal;
+        Optr[outer * InnerDim + inner] = accVal;
+#endif
+#if defined(PARTIAL)
+        Optr[outer * SpatialDimsO * InnerDim + gs * InnerDim + inner] = accVal;
+#endif
+    }
+}
+
+
+
+inline int rda_sum2i(int v0, int v1)
+{
+    return v0 + v1;
+}
+
+        
+inline int rdi_sum2i(int v)
+{
+    return IsFirstDispatch ? v * v : v;
+}
+
+inline void ReduceSumSquareIntInternalReduce(uint gtz, uint s)
+{
+    if (gtz < s)
+    {
+        int v0 = LDS_AccumulationBuffer[gtz];
+        int v1 = LDS_AccumulationBuffer[gtz + s];
+        int acc = rda_sum2i(v0, v1);
+        LDS_AccumulationBuffer[gtz] = acc;
+    }
+    GroupMemoryBarrierWithGroupSync();
+}
+
+[numthreads(1, POOL_SIZE, 1)]
+void SUFFIX_REDUCESUMSQUAREINT(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV_GroupThreadID, uint3 groupId : SV_GroupID)
+{
+    uint outer = dispatchThreadID.x;
+    uint inner = dispatchThreadID.z;
+
+    uint gts = groupThreadID.y;
+    uint gs = groupId.y;
+
+    // https://developer.download.nvidia.com/assets/cuda/files/reduction.pdf
+    // half the number of blocks (x and y) replaced with 4 loads
+    uint s = gs * POOL_SIZE * 4 + gts;
+
+    #if defined(SHADER_API_MOBILE)
+    int v0 = s + 0 * POOL_SIZE >= ReducedDim ? 0 : Xptr[outer * ReducedDim * InnerDim + min(s + 0 * POOL_SIZE, ReducedDim) * InnerDim + inner];
+    int v1 = s + 1 * POOL_SIZE >= ReducedDim ? 0 : Xptr[outer * ReducedDim * InnerDim + min(s + 1 * POOL_SIZE, ReducedDim) * InnerDim + inner];
+    int v2 = s + 2 * POOL_SIZE >= ReducedDim ? 0 : Xptr[outer * ReducedDim * InnerDim + min(s + 2 * POOL_SIZE, ReducedDim) * InnerDim + inner];
+    int v3 = s + 3 * POOL_SIZE >= ReducedDim ? 0 : Xptr[outer * ReducedDim * InnerDim + min(s + 3 * POOL_SIZE, ReducedDim) * InnerDim + inner];
+    #else
+    int v0 = s + 0 * POOL_SIZE >= ReducedDim ? 0 : Xptr[outer * ReducedDim * InnerDim + (s + 0 * POOL_SIZE) * InnerDim + inner];
+    int v1 = s + 1 * POOL_SIZE >= ReducedDim ? 0 : Xptr[outer * ReducedDim * InnerDim + (s + 1 * POOL_SIZE) * InnerDim + inner];
+    int v2 = s + 2 * POOL_SIZE >= ReducedDim ? 0 : Xptr[outer * ReducedDim * InnerDim + (s + 2 * POOL_SIZE) * InnerDim + inner];
+    int v3 = s + 3 * POOL_SIZE >= ReducedDim ? 0 : Xptr[outer * ReducedDim * InnerDim + (s + 3 * POOL_SIZE) * InnerDim + inner];
+    #endif
+
+            
+    v0 = rdi_sum2i(v0);
+    v1 = rdi_sum2i(v1);
+    v2 = rdi_sum2i(v2);
+    v3 = rdi_sum2i(v3);
+
+    LDS_AccumulationBuffer[gts] = rda_sum2i(v0, rda_sum2i(v1, rda_sum2i(v2, v3)));
+
+    GroupMemoryBarrierWithGroupSync();
+
+    // sequential addressing
+    // mem = [x0...xn y0..yn]
+    //     = [x0+y0...xn+yn ...]
+    // last sum saved for last
+    // following code is unrolled:
+    // for s = (POOL_SIZE) / 2; s > 1; s >>= 1
+    ReduceSumSquareIntInternalReduce(gts, 32);
+    ReduceSumSquareIntInternalReduce(gts, 16);
+    ReduceSumSquareIntInternalReduce(gts, 8);
+    ReduceSumSquareIntInternalReduce(gts, 4);
+    ReduceSumSquareIntInternalReduce(gts, 2);
+
+    if (gts == 0)
+    {
+        float accVal = rda_sum2i(LDS_AccumulationBuffer[0], LDS_AccumulationBuffer[1]);
+#if defined(GLOBAL)
+        accVal = accVal;
+        Optr[outer * InnerDim + inner] = accVal;
+#endif
+#if defined(PARTIAL)
+        Optr[outer * SpatialDimsO * InnerDim + gs * InnerDim + inner] = accVal;
+#endif
+    }
+}
+
+
+
+inline int rda_prodi(int v0, int v1)
+{
+    return v0 * v1;
+}
+
+
+inline void ReduceProdIntInternalReduce(uint gtz, uint s)
+{
+    if (gtz < s)
+    {
+        int v0 = LDS_AccumulationBuffer[gtz];
+        int v1 = LDS_AccumulationBuffer[gtz + s];
+        int acc = rda_prodi(v0, v1);
+        LDS_AccumulationBuffer[gtz] = acc;
+    }
+    GroupMemoryBarrierWithGroupSync();
+}
+
+[numthreads(1, POOL_SIZE, 1)]
+void SUFFIX_REDUCEPRODINT(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV_GroupThreadID, uint3 groupId : SV_GroupID)
+{
+    uint outer = dispatchThreadID.x;
+    uint inner = dispatchThreadID.z;
+
+    uint gts = groupThreadID.y;
+    uint gs = groupId.y;
+
+    // https://developer.download.nvidia.com/assets/cuda/files/reduction.pdf
+    // half the number of blocks (x and y) replaced with 4 loads
+    uint s = gs * POOL_SIZE * 4 + gts;
+
+    #if defined(SHADER_API_MOBILE)
+    int v0 = s + 0 * POOL_SIZE >= ReducedDim ? 1 : Xptr[outer * ReducedDim * InnerDim + min(s + 0 * POOL_SIZE, ReducedDim) * InnerDim + inner];
+    int v1 = s + 1 * POOL_SIZE >= ReducedDim ? 1 : Xptr[outer * ReducedDim * InnerDim + min(s + 1 * POOL_SIZE, ReducedDim) * InnerDim + inner];
+    int v2 = s + 2 * POOL_SIZE >= ReducedDim ? 1 : Xptr[outer * ReducedDim * InnerDim + min(s + 2 * POOL_SIZE, ReducedDim) * InnerDim + inner];
+    int v3 = s + 3 * POOL_SIZE >= ReducedDim ? 1 : Xptr[outer * ReducedDim * InnerDim + min(s + 3 * POOL_SIZE, ReducedDim) * InnerDim + inner];
+    #else
+    int v0 = s + 0 * POOL_SIZE >= ReducedDim ? 1 : Xptr[outer * ReducedDim * InnerDim + (s + 0 * POOL_SIZE) * InnerDim + inner];
+    int v1 = s + 1 * POOL_SIZE >= ReducedDim ? 1 : Xptr[outer * ReducedDim * InnerDim + (s + 1 * POOL_SIZE) * InnerDim + inner];
+    int v2 = s + 2 * POOL_SIZE >= ReducedDim ? 1 : Xptr[outer * ReducedDim * InnerDim + (s + 2 * POOL_SIZE) * InnerDim + inner];
+    int v3 = s + 3 * POOL_SIZE >= ReducedDim ? 1 : Xptr[outer * ReducedDim * InnerDim + (s + 3 * POOL_SIZE) * InnerDim + inner];
+    #endif
+
+    
+    LDS_AccumulationBuffer[gts] = rda_prodi(v0, rda_prodi(v1, rda_prodi(v2, v3)));
+
+    GroupMemoryBarrierWithGroupSync();
+
+    // sequential addressing
+    // mem = [x0...xn y0..yn]
+    //     = [x0+y0...xn+yn ...]
+    // last sum saved for last
+    // following code is unrolled:
+    // for s = (POOL_SIZE) / 2; s > 1; s >>= 1
+    ReduceProdIntInternalReduce(gts, 32);
+    ReduceProdIntInternalReduce(gts, 16);
+    ReduceProdIntInternalReduce(gts, 8);
+    ReduceProdIntInternalReduce(gts, 4);
+    ReduceProdIntInternalReduce(gts, 2);
+
+    if (gts == 0)
+    {
+        float accVal = rda_prodi(LDS_AccumulationBuffer[0], LDS_AccumulationBuffer[1]);
+#if defined(GLOBAL)
+        accVal = accVal;
+        Optr[outer * InnerDim + inner] = accVal;
+#endif
+#if defined(PARTIAL)
+        Optr[outer * SpatialDimsO * InnerDim + gs * InnerDim + inner] = accVal;
+#endif
+    }
+}
+
+
+
+inline int rda_l1i(int v0, int v1)
+{
+    return v0 + v1;
+}
+
+        
+inline int rdi_l1i(int v)
+{
+    return abs(v);
+}
+
+inline void ReduceL1IntInternalReduce(uint gtz, uint s)
+{
+    if (gtz < s)
+    {
+        int v0 = LDS_AccumulationBuffer[gtz];
+        int v1 = LDS_AccumulationBuffer[gtz + s];
+        int acc = rda_l1i(v0, v1);
+        LDS_AccumulationBuffer[gtz] = acc;
+    }
+    GroupMemoryBarrierWithGroupSync();
+}
+
+[numthreads(1, POOL_SIZE, 1)]
+void SUFFIX_REDUCEL1INT(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV_GroupThreadID, uint3 groupId : SV_GroupID)
+{
+    uint outer = dispatchThreadID.x;
+    uint inner = dispatchThreadID.z;
+
+    uint gts = groupThreadID.y;
+    uint gs = groupId.y;
+
+    // https://developer.download.nvidia.com/assets/cuda/files/reduction.pdf
+    // half the number of blocks (x and y) replaced with 4 loads
+    uint s = gs * POOL_SIZE * 4 + gts;
+
+    #if defined(SHADER_API_MOBILE)
+    int v0 = s + 0 * POOL_SIZE >= ReducedDim ? 0 : Xptr[outer * ReducedDim * InnerDim + min(s + 0 * POOL_SIZE, ReducedDim) * InnerDim + inner];
+    int v1 = s + 1 * POOL_SIZE >= ReducedDim ? 0 : Xptr[outer * ReducedDim * InnerDim + min(s + 1 * POOL_SIZE, ReducedDim) * InnerDim + inner];
+    int v2 = s + 2 * POOL_SIZE >= ReducedDim ? 0 : Xptr[outer * ReducedDim * InnerDim + min(s + 2 * POOL_SIZE, ReducedDim) * InnerDim + inner];
+    int v3 = s + 3 * POOL_SIZE >= ReducedDim ? 0 : Xptr[outer * ReducedDim * InnerDim + min(s + 3 * POOL_SIZE, ReducedDim) * InnerDim + inner];
+    #else
+    int v0 = s + 0 * POOL_SIZE >= ReducedDim ? 0 : Xptr[outer * ReducedDim * InnerDim + (s + 0 * POOL_SIZE) * InnerDim + inner];
+    int v1 = s + 1 * POOL_SIZE >= ReducedDim ? 0 : Xptr[outer * ReducedDim * InnerDim + (s + 1 * POOL_SIZE) * InnerDim + inner];
+    int v2 = s + 2 * POOL_SIZE >= ReducedDim ? 0 : Xptr[outer * ReducedDim * InnerDim + (s + 2 * POOL_SIZE) * InnerDim + inner];
+    int v3 = s + 3 * POOL_SIZE >= ReducedDim ? 0 : Xptr[outer * ReducedDim * InnerDim + (s + 3 * POOL_SIZE) * InnerDim + inner];
+    #endif
+
+            
+    v0 = rdi_l1i(v0);
+    v1 = rdi_l1i(v1);
+    v2 = rdi_l1i(v2);
+    v3 = rdi_l1i(v3);
+
+    LDS_AccumulationBuffer[gts] = rda_l1i(v0, rda_l1i(v1, rda_l1i(v2, v3)));
+
+    GroupMemoryBarrierWithGroupSync();
+
+    // sequential addressing
+    // mem = [x0...xn y0..yn]
+    //     = [x0+y0...xn+yn ...]
+    // last sum saved for last
+    // following code is unrolled:
+    // for s = (POOL_SIZE) / 2; s > 1; s >>= 1
+    ReduceL1IntInternalReduce(gts, 32);
+    ReduceL1IntInternalReduce(gts, 16);
+    ReduceL1IntInternalReduce(gts, 8);
+    ReduceL1IntInternalReduce(gts, 4);
+    ReduceL1IntInternalReduce(gts, 2);
+
+    if (gts == 0)
+    {
+        float accVal = rda_l1i(LDS_AccumulationBuffer[0], LDS_AccumulationBuffer[1]);
+#if defined(GLOBAL)
+        accVal = accVal;
+        Optr[outer * InnerDim + inner] = accVal;
+#endif
+#if defined(PARTIAL)
+        Optr[outer * SpatialDimsO * InnerDim + gs * InnerDim + inner] = accVal;
+#endif
+    }
+}
+

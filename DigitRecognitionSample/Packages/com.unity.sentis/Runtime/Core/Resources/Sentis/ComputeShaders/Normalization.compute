@@ -1,0 +1,126 @@
+#pragma kernel LayerNormalizationTail
+#pragma kernel BatchNormalization
+#pragma kernel ScaleBias
+
+#include "Tensor.cginc"
+
+StructuredBuffer<float> Xptr;
+StructuredBuffer<float> Sptr;
+StructuredBuffer<float> Bptr;
+StructuredBuffer<float> Wptr;
+StructuredBuffer<float> Zptr;
+RWStructuredBuffer<float> Optr;
+
+uint outerLength, axisDim, innerLength;
+float epsilon;
+
+[numthreads(8, 8, 1)]
+void LayerNormalizationTail(uint3 dispatchThreadID : SV_DispatchThreadID)
+{
+    uint dim = dispatchThreadID.x;
+    uint outer = dispatchThreadID.y;
+
+    if (outer >= outerLength || dim >= axisDim)
+        return;
+
+    float mean = Wptr[(outer * 2 + 0)];
+    float variance = Wptr[(outer * 2 + 1)];
+
+    float scale = Sptr[dim];
+    float bias = Bptr[dim];
+
+    uint threadIndex = (outer * axisDim + dim);
+    float v = Xptr[threadIndex];
+
+    v = (v - mean) / sqrt(variance + epsilon);
+    v = scale * v + bias;
+
+    Optr[threadIndex] = v;
+}
+
+uint LengthO; uint batch; uint channels; uint spatialDims;
+
+[numthreads(8, 8, 1)]
+void BatchNormalization(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV_GroupThreadID, uint threadIndex : SV_GroupIndex, uint3 groupID : SV_GroupID)
+{
+    uint sp = dispatchThreadID.x;
+    uint4 c = (groupID.y << 5) | uint4(0, 8, 16, 24) | groupThreadID.y;
+    uint b = dispatchThreadID.z;
+
+    if (b >= batch || sp >= spatialDims)
+        return;
+
+    c = min(c, channels - 1);
+    uint4 idx = (b * channels * spatialDims + c * spatialDims + sp);
+
+    float4 mean     = float4(Wptr[c.x], Wptr[c.y], Wptr[c.z], Wptr[c.w]);
+    float4 variance = float4(Zptr[c.x], Zptr[c.y], Zptr[c.z], Zptr[c.w]);
+    float4 scale    = float4(Sptr[c.x], Sptr[c.y], Sptr[c.z], Sptr[c.w]);
+    float4 bias     = float4(Bptr[c.x], Bptr[c.y], Bptr[c.z], Bptr[c.w]);
+    float4 v = float4(Xptr[idx.x], Xptr[idx.y], Xptr[idx.z], Xptr[idx.w]);
+
+    v = (v - mean) / sqrt(variance + epsilon);
+    v = scale * v + bias;
+
+    #if defined(SHADER_API_MOBILE)
+    if (idx.x <= LengthO)
+        Optr[idx.x] = v.x;
+    if (idx.y <= LengthO)
+        Optr[idx.y] = v.y;
+    if (idx.z <= LengthO)
+        Optr[idx.z] = v.z;
+    if (idx.w <= LengthO)
+        Optr[idx.w] = v.w;
+    #else
+    uint4 storeIndex = 0xFFFFFFFF;
+    storeIndex.x = idx.x <= LengthO ? idx.x : storeIndex.x;
+    storeIndex.y = idx.y <= LengthO ? idx.y : storeIndex.y;
+    storeIndex.z = idx.z <= LengthO ? idx.z : storeIndex.z;
+    storeIndex.w = idx.w <= LengthO ? idx.w : storeIndex.w;
+    Optr[storeIndex.x] = v.x;
+    Optr[storeIndex.y] = v.y;
+    Optr[storeIndex.z] = v.z;
+    Optr[storeIndex.w] = v.w;
+    #endif
+}
+
+[numthreads(8, 8, 1)]
+void ScaleBias(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV_GroupThreadID, uint threadIndex : SV_GroupIndex, uint3 groupID : SV_GroupID)
+{
+    uint sp = dispatchThreadID.x;
+    uint4 c = (groupID.y << 5) | uint4(0, 8, 16, 24) | groupThreadID.y;
+    uint b = dispatchThreadID.z;
+
+    if (b >= batch || sp >= spatialDims)
+        return;
+
+    c = min(c, channels - 1);
+    uint4 idx = (b * channels * spatialDims + c * spatialDims + sp);
+
+    float4 scale    = float4(Sptr[c.x], Sptr[c.y], Sptr[c.z], Sptr[c.w]);
+    float4 bias     = float4(Bptr[c.x], Bptr[c.y], Bptr[c.z], Bptr[c.w]);
+    float4 v = float4(Xptr[idx.x], Xptr[idx.y], Xptr[idx.z], Xptr[idx.w]);
+
+    v = scale * v + bias;
+
+    #if defined(SHADER_API_MOBILE)
+    if (idx.x <= LengthO)
+        Optr[idx.x] = v.x;
+    if (idx.y <= LengthO)
+        Optr[idx.y] = v.y;
+    if (idx.z <= LengthO)
+        Optr[idx.z] = v.z;
+    if (idx.w <= LengthO)
+        Optr[idx.w] = v.w;
+    #else
+    uint4 storeIndex = 0xFFFFFFFF;
+    storeIndex.x = idx.x <= LengthO ? idx.x : storeIndex.x;
+    storeIndex.y = idx.y <= LengthO ? idx.y : storeIndex.y;
+    storeIndex.z = idx.z <= LengthO ? idx.z : storeIndex.z;
+    storeIndex.w = idx.w <= LengthO ? idx.w : storeIndex.w;
+    Optr[storeIndex.x] = v.x;
+    Optr[storeIndex.y] = v.y;
+    Optr[storeIndex.z] = v.z;
+    Optr[storeIndex.w] = v.w;
+    #endif
+}

@@ -1,0 +1,17 @@
+#pragma kernel TensorToTextureExact SUFFIX=Exact EXACT
+#pragma kernel TensorToTextureLinear SUFFIX=Linear LINEAR
+#define FUNC_NAME_CALL(SUFFIX)  TensorToTexture##SUFFIX
+
+RWTexture2D<float4> O_tex2D;
+
+#include "TensorToTextureUtils.cginc"
+
+[numthreads(8,8,1)]
+void FUNC_NAME_CALL(SUFFIX)(uint3 dispatchThreadID : SV_DispatchThreadID)
+{
+    uint2 O_pos = dispatchThreadID.yx;
+    if (O_pos.x >= O_width || O_pos.y >= O_height)
+        return;
+
+    O_tex2D[dispatchThreadID.yx] = ComputeColor(O_pos);
+}

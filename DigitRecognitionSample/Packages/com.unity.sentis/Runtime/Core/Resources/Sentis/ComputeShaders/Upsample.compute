@@ -1,0 +1,172 @@
+#pragma kernel Upsample1D_Nearest_Floor NEAREST SUFFIX=Nearest FLOOR MODE=Floor
+#pragma kernel Upsample1D_Nearest_Ceil NEAREST SUFFIX=Nearest CEIL MODE=Ceil
+#pragma kernel Upsample1D_Linear_None LINEAR SUFFIX=Linear MODE=None
+
+#pragma kernel Upsample2D_Nearest_Floor NEAREST SUFFIX=Nearest FLOOR MODE=Floor
+#pragma kernel Upsample2D_Nearest_Ceil NEAREST SUFFIX=Nearest CEIL MODE=Ceil
+#pragma kernel Upsample2D_Linear_None LINEAR SUFFIX=Linear MODE=None
+
+#pragma kernel Upsample3D_Nearest_Floor NEAREST SUFFIX=Nearest FLOOR MODE=Floor
+#pragma kernel Upsample3D_Nearest_Ceil NEAREST SUFFIX=Nearest CEIL MODE=Ceil
+#pragma kernel Upsample3D_Linear_None LINEAR SUFFIX=Linear MODE=None
+
+float4 scale;
+float4 bias;
+
+int outWidth;
+int outHeight;
+int inWidth;
+int inHeight;
+
+StructuredBuffer<float> Xptr;
+RWStructuredBuffer<float> Optr;
+
+float BilinearInterpolation(float fracSrcPosX, float fracSrcPosY, float p00, float p01, float p10, float p11)
+{
+    float v = p00 * (1 - fracSrcPosX) * (1 - fracSrcPosY) +
+              p01 * (1 - fracSrcPosX) * fracSrcPosY +
+              p10 * fracSrcPosX       * (1 - fracSrcPosY) +
+              p11 * fracSrcPosX       * fracSrcPosY;
+    return v;
+}
+
+#define FUNC_NAME(KERNEL, SIZE) Upsample1D_##KERNEL##_##SIZE
+
+[numthreads(1, 8, 1)]
+void FUNC_NAME(SUFFIX, MODE)(uint3 dispatchThreadID : SV_DispatchThreadID)
+{
+    uint bc = dispatchThreadID.x;
+    uint x = dispatchThreadID.y;
+
+    if (x >= (uint)outWidth) return;
+
+    float srcPosX = x * scale[0] + bias[0];
+
+    #if defined(LINEAR)
+        float floorSrcPosX = floor(srcPosX);
+        float fracSrcPosX = srcPosX - floorSrcPosX;
+
+        //from https://www.scratchapixel.com/lessons/mathematics-physics-for-computer-graphics/interpolation/trilinear-interpolation
+        float p0 = Xptr[bc * inWidth + clamp((int)floorSrcPosX + 0, 0, inWidth - 1)];
+        float p1 = Xptr[bc * inWidth + clamp((int)floorSrcPosX + 1, 0, inWidth - 1)];
+        Optr[bc * outWidth + x] = p1 * fracSrcPosX + p0 * (1 - fracSrcPosX);
+    #endif
+    #if defined(NEAREST)
+        int ox;
+        #if defined(FLOOR)
+            ox = (int)floor(srcPosX);
+        #elif defined(CEIL)
+            ox = (int)ceil(srcPosX);
+        #endif
+        Optr[bc * outWidth + x] = Xptr[bc * inWidth + clamp(ox, 0, inWidth - 1)];
+    #endif
+}
+
+#undef FUNC_NAME
+
+#define FUNC_NAME(KERNEL, SIZE) Upsample2D_##KERNEL##_##SIZE
+
+[numthreads(1, 8, 8)]
+void FUNC_NAME(SUFFIX, MODE)(uint3 dispatchThreadID : SV_DispatchThreadID)
+{
+    uint bc = dispatchThreadID.x;
+    uint y = dispatchThreadID.y;
+    uint x = dispatchThreadID.z;
+
+    if (y >= (uint)outHeight) return;
+    if (x >= (uint)outWidth) return;
+
+    float srcPosY = y * scale[0] + bias[0];
+    float srcPosX = x * scale[1] + bias[1];
+
+    #if defined(LINEAR)
+        float floorSrcPosX = floor(srcPosX);
+        float floorSrcPosY = floor(srcPosY);
+        float fracSrcPosX = srcPosX - floorSrcPosX;
+        float fracSrcPosY = srcPosY - floorSrcPosY;
+
+        //from https://www.scratchapixel.com/lessons/mathematics-physics-for-computer-graphics/interpolation/trilinear-interpolation
+        float p00 = Xptr[bc * inHeight * inWidth + clamp((int)floorSrcPosY + 0, 0, inHeight - 1) * inWidth + clamp((int)floorSrcPosX + 0, 0, inWidth - 1)];
+        float p01 = Xptr[bc * inHeight * inWidth + clamp((int)floorSrcPosY + 1, 0, inHeight - 1) * inWidth + clamp((int)floorSrcPosX + 0, 0, inWidth - 1)];
+        float p10 = Xptr[bc * inHeight * inWidth + clamp((int)floorSrcPosY + 0, 0, inHeight - 1) * inWidth + clamp((int)floorSrcPosX + 1, 0, inWidth - 1)];
+        float p11 = Xptr[bc * inHeight * inWidth + clamp((int)floorSrcPosY + 1, 0, inHeight - 1) * inWidth + clamp((int)floorSrcPosX + 1, 0, inWidth - 1)];
+        Optr[bc * outHeight * outWidth + y * outWidth + x] = BilinearInterpolation(fracSrcPosX, fracSrcPosY, p00, p01, p10, p11);
+    #endif
+    #if defined(NEAREST)
+        int oy;
+        int ox;
+        #if defined(FLOOR)
+            oy = (int)floor(srcPosY);
+            ox = (int)floor(srcPosX);
+        #elif defined(CEIL)
+            oy = (int)ceil(srcPosY);
+            ox = (int)ceil(srcPosX);
+        #endif
+        Optr[bc * outHeight * outWidth + y * outWidth + x] = Xptr[bc * inHeight * inWidth + clamp(oy, 0, inHeight - 1) * inWidth + clamp(ox, 0, inWidth - 1)];
+    #endif
+}
+
+#undef FUNC_NAME
+#define FUNC_NAME(KERNEL, SIZE) Upsample3D_##KERNEL##_##SIZE
+
+int outBatch;
+int outChannels;
+int outDepth;
+int inDepth;
+
+[numthreads(8, 8, 8)]
+void FUNC_NAME(SUFFIX, MODE)(uint3 dispatchThreadID : SV_DispatchThreadID)
+{
+    uint d = dispatchThreadID.x;
+    uint y = dispatchThreadID.y;
+    uint x = dispatchThreadID.z;
+
+    if (d >= (uint)outDepth) return;
+    if (y >= (uint)outHeight) return;
+    if (x >= (uint)outWidth) return;
+
+    for(int bc = 0; bc < outBatch * outChannels; bc++)
+    {
+        float srcPosD = d * scale[0] + bias[0];
+        float srcPosY = y * scale[1] + bias[1];
+        float srcPosX = x * scale[2] + bias[2];
+
+        #if defined(LINEAR)
+            float floorSrcPosD = floor(srcPosD);
+            float floorSrcPosX = floor(srcPosX);
+            float floorSrcPosY = floor(srcPosY);
+            float fracSrcPosD = srcPosD - floorSrcPosD;
+            float fracSrcPosX = srcPosX - floorSrcPosX;
+            float fracSrcPosY = srcPosY - floorSrcPosY;
+
+            //from https://www.scratchapixel.com/lessons/mathematics-physics-for-computer-graphics/interpolation/trilinear-interpolation
+            float p000 = Xptr[bc * inDepth * inHeight * inWidth + clamp((int)floorSrcPosD + 0, 0, inDepth - 1) * inHeight * inWidth + clamp((int)floorSrcPosY + 0, 0, inHeight - 1) * inWidth + clamp((int)floorSrcPosX + 0, 0, inWidth - 1)];
+            float p001 = Xptr[bc * inDepth * inHeight * inWidth + clamp((int)floorSrcPosD + 1, 0, inDepth - 1) * inHeight * inWidth + clamp((int)floorSrcPosY + 0, 0, inHeight - 1) * inWidth + clamp((int)floorSrcPosX + 0, 0, inWidth - 1)];
+            float p010 = Xptr[bc * inDepth * inHeight * inWidth + clamp((int)floorSrcPosD + 0, 0, inDepth - 1) * inHeight * inWidth + clamp((int)floorSrcPosY + 1, 0, inHeight - 1) * inWidth + clamp((int)floorSrcPosX + 0, 0, inWidth - 1)];
+            float p011 = Xptr[bc * inDepth * inHeight * inWidth + clamp((int)floorSrcPosD + 1, 0, inDepth - 1) * inHeight * inWidth + clamp((int)floorSrcPosY + 1, 0, inHeight - 1) * inWidth + clamp((int)floorSrcPosX + 0, 0, inWidth - 1)];
+            float p100 = Xptr[bc * inDepth * inHeight * inWidth + clamp((int)floorSrcPosD + 0, 0, inDepth - 1) * inHeight * inWidth + clamp((int)floorSrcPosY + 0, 0, inHeight - 1) * inWidth + clamp((int)floorSrcPosX + 1, 0, inWidth - 1)];
+            float p101 = Xptr[bc * inDepth * inHeight * inWidth + clamp((int)floorSrcPosD + 1, 0, inDepth - 1) * inHeight * inWidth + clamp((int)floorSrcPosY + 0, 0, inHeight - 1) * inWidth + clamp((int)floorSrcPosX + 1, 0, inWidth - 1)];
+            float p110 = Xptr[bc * inDepth * inHeight * inWidth + clamp((int)floorSrcPosD + 0, 0, inDepth - 1) * inHeight * inWidth + clamp((int)floorSrcPosY + 1, 0, inHeight - 1) * inWidth + clamp((int)floorSrcPosX + 1, 0, inWidth - 1)];
+            float p111 = Xptr[bc * inDepth * inHeight * inWidth + clamp((int)floorSrcPosD + 1, 0, inDepth - 1) * inHeight * inWidth + clamp((int)floorSrcPosY + 1, 0, inHeight - 1) * inWidth + clamp((int)floorSrcPosX + 1, 0, inWidth - 1)];
+            float e = BilinearInterpolation(fracSrcPosX, fracSrcPosY, p000, p010, p100, p110);
+            float f = BilinearInterpolation(fracSrcPosX, fracSrcPosY, p001, p011, p101, p111);
+            float v = e * (1 - fracSrcPosD) + f * fracSrcPosD;
+            Optr[bc * outDepth * outHeight * outWidth + d * outHeight * outWidth + y * outWidth + x] = v;
+        #endif
+        #if defined(NEAREST)
+            int od;
+            int oy;
+            int ox;
+            #if defined(FLOOR)
+                od = (int)floor(srcPosD);
+                oy = (int)floor(srcPosY);
+                ox = (int)floor(srcPosX);
+            #elif defined(CEIL)
+                od = (int)ceil(srcPosD);
+                oy = (int)ceil(srcPosY);
+                ox = (int)ceil(srcPosX);
+            #endif
+            Optr[bc * outDepth * outHeight * outWidth + d * outHeight * outWidth + y * outWidth + x] = Xptr[bc * inDepth * inHeight * inWidth + clamp(od, 0, inDepth - 1) * inHeight * inWidth + clamp(oy, 0, inHeight - 1) * inWidth + clamp(ox, 0, inWidth - 1)];
+        #endif
+    }
+}

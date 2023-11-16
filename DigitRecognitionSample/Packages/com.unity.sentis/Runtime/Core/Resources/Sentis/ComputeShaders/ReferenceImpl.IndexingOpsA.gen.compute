@@ -1,0 +1,156 @@
+// This is auto-generated -- do not modify directly
+
+#pragma kernel Tile TILE
+#pragma kernel Gather GATHER
+#pragma kernel GatherElements GATHERELEMENTS
+#pragma kernel ScatterElements SCATTERELEMENTS
+#pragma kernel Expand EXPAND
+#pragma kernel Slice SLICE
+#include "Tensor.cginc"
+
+int shapeO[8];
+int stridesO[8];
+int shapeX[8];
+int stridesX[8];
+int starts[8];
+int steps[8];
+uint2 unrolledDispatchArgs;
+int rank;
+int axisDim;
+int endLength;
+int indicesLength;
+int axisDimX;
+int endLengthX;
+int axisDimIndices;
+int reduction;
+StructuredBuffer<float> Xptr;
+StructuredBuffer<int> Bptr;
+RWStructuredBuffer<float> Optr;
+
+
+#ifdef TILE
+[numthreads(64, 1, 1)]
+void Tile(uint3 dispatchThreadID : SV_DispatchThreadID)
+{
+    uint threadIdx = unrolledDispatchArgs.x * dispatchThreadID.y + dispatchThreadID.x;
+    if(threadIdx >= unrolledDispatchArgs.y)
+        return;
+    {
+        int indexX = 0;
+        for (int axis = 0; axis < rank; axis++)
+        {
+            indexX += (((threadIdx / stridesO[(SHAPE_MAXRANK-1) - axis]) % shapeO[(SHAPE_MAXRANK-1) - axis]) % shapeX[(SHAPE_MAXRANK-1) - axis]) * stridesX[(SHAPE_MAXRANK-1) - axis];
+        }
+
+        Optr[threadIdx] = Xptr[indexX];
+    }
+}
+#endif
+
+
+#ifdef GATHER
+[numthreads(64, 1, 1)]
+void Gather(uint3 dispatchThreadID : SV_DispatchThreadID)
+{
+    uint threadIdx = unrolledDispatchArgs.x * dispatchThreadID.y + dispatchThreadID.x;
+    if(threadIdx >= unrolledDispatchArgs.y)
+        return;
+    {
+        int end = threadIdx % endLength;
+        int indices = (threadIdx / endLength) % indicesLength;
+        int start = threadIdx / (endLength * indicesLength);
+
+        int index = (int)Bptr[indices];
+        index = index < 0 ? axisDim + index : index;
+
+        Optr[threadIdx] = Xptr[start * endLength * axisDim + index * endLength + end];
+    }
+}
+#endif
+
+
+#ifdef GATHERELEMENTS
+[numthreads(64, 1, 1)]
+void GatherElements(uint3 dispatchThreadID : SV_DispatchThreadID)
+{
+    uint threadIdx = unrolledDispatchArgs.x * dispatchThreadID.y + dispatchThreadID.x;
+    if(threadIdx >= unrolledDispatchArgs.y)
+        return;
+    {
+        int end = threadIdx % endLength;
+        int start = threadIdx / (axisDim * endLength);
+
+        int index = (int)Bptr[threadIdx];
+        index = index < 0 ? axisDimX + index : index;
+
+        Optr[threadIdx] = Xptr[start * endLengthX * axisDimX + index * endLengthX + end];
+    }
+}
+#endif
+
+
+#ifdef SCATTERELEMENTS
+[numthreads(64, 1, 1)]
+void ScatterElements(uint3 dispatchThreadID : SV_DispatchThreadID)
+{
+    uint threadIdx = unrolledDispatchArgs.x * dispatchThreadID.y + dispatchThreadID.x;
+    if(threadIdx >= unrolledDispatchArgs.y)
+        return;
+    {
+        int end = threadIdx % endLength;
+        int start = threadIdx / (endLength * axisDimIndices);
+
+        int index = (int)Bptr[threadIdx];
+        index = index < 0 ? axisDim + index : index;
+
+        if (reduction == 0)
+            Optr[start * axisDim * endLength + index * endLength + end] = Xptr[threadIdx];
+        else if (reduction == 1)
+            Optr[start * axisDim * endLength + index * endLength + end] += Xptr[threadIdx];
+        else if (reduction == 2)
+            Optr[start * axisDim * endLength + index * endLength + end] *= Xptr[threadIdx];
+    }
+}
+#endif
+
+
+#ifdef EXPAND
+[numthreads(64, 1, 1)]
+void Expand(uint3 dispatchThreadID : SV_DispatchThreadID)
+{
+    uint threadIdx = unrolledDispatchArgs.x * dispatchThreadID.y + dispatchThreadID.x;
+    if(threadIdx >= unrolledDispatchArgs.y)
+        return;
+    {
+        int indexX = 0;
+        for (int axis = 0; axis < rank; axis++)
+        {
+            indexX += (((threadIdx / stridesO[(SHAPE_MAXRANK - 1) - axis]) % shapeO[(SHAPE_MAXRANK - 1) - axis]) % shapeX[(SHAPE_MAXRANK - 1) - axis]) * stridesX[(SHAPE_MAXRANK - 1) - axis];
+        }
+
+        Optr[threadIdx] = Xptr[indexX];
+    }
+}
+#endif
+
+
+#ifdef SLICE
+[numthreads(64, 1, 1)]
+void Slice(uint3 dispatchThreadID : SV_DispatchThreadID)
+{
+    uint threadIdx = unrolledDispatchArgs.x * dispatchThreadID.y + dispatchThreadID.x;
+    if(threadIdx >= unrolledDispatchArgs.y)
+        return;
+    {
+        int indexX = 0;
+        for (int axis = 0; axis < rank; axis++)
+        {
+            int iA = starts[(SHAPE_MAXRANK-1) - axis] + ((threadIdx / stridesO[(SHAPE_MAXRANK-1) - axis]) % shapeO[(SHAPE_MAXRANK-1) - axis]) * steps[(SHAPE_MAXRANK-1) - axis];
+            indexX += ((uint)iA % shapeX[(SHAPE_MAXRANK-1) - axis]) * stridesX[(SHAPE_MAXRANK-1) - axis];
+        }
+
+        Optr[threadIdx] = Xptr[indexX];
+    }
+}
+#endif
+

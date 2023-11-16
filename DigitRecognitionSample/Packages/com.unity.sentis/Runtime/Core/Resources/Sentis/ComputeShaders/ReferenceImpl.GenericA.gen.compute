@@ -1,0 +1,74 @@
+// This is auto-generated -- do not modify directly
+
+#pragma kernel Transpose TRANSPOSE
+#pragma kernel InstanceNormalizationTail INSTANCENORMALIZATIONTAIL
+#include "Tensor.cginc"
+
+int shapeX[8];
+int stridesX[8];
+int permutations[8];
+uint2 unrolledDispatchArgs;
+float epsilon;
+int rank;
+int channels;
+int spatialDims;
+StructuredBuffer<float> Xptr;
+StructuredBuffer<float> Sptr;
+StructuredBuffer<float> Bptr;
+StructuredBuffer<float> Wptr;
+RWStructuredBuffer<float> Optr;
+
+
+#ifdef TRANSPOSE
+[numthreads(64, 1, 1)]
+void Transpose(uint3 dispatchThreadID : SV_DispatchThreadID)
+{
+    uint threadIdx = unrolledDispatchArgs.x * dispatchThreadID.y + dispatchThreadID.x;
+    if(threadIdx >= unrolledDispatchArgs.y)
+        return;
+    {
+        int idx = 0;
+        int trailingDim = 1;
+        for (int j = (rank-1); j >= 0; j--)
+        {
+            int tj = permutations[j];
+            int ti = (SHAPE_MAXRANK - rank) + tj;
+            idx += trailingDim * ((threadIdx / stridesX[ti]) % shapeX[ti]);
+            trailingDim *= shapeX[(SHAPE_MAXRANK - rank) + tj];
+        }
+
+        Optr[idx] = Xptr[threadIdx];
+    }
+}
+#endif
+
+
+#ifdef INSTANCENORMALIZATIONTAIL
+[numthreads(64, 1, 1)]
+void InstanceNormalizationTail(uint3 dispatchThreadID : SV_DispatchThreadID)
+{
+    uint threadIdx = unrolledDispatchArgs.x * dispatchThreadID.y + dispatchThreadID.x;
+    if(threadIdx >= unrolledDispatchArgs.y)
+        return;
+    {
+        int bc = threadIdx / (spatialDims);
+        int c = (uint)bc % channels;
+
+        float mean = Wptr[bc * 2 + 0];
+        float variance = Wptr[bc * 2 + 1];
+
+        float scale = Sptr[c];
+        float bias = Bptr[c];
+
+        // normalization factor
+        float invNormFactor = 1 / sqrt(variance + epsilon);
+
+        float v = Xptr[threadIdx];
+        v = v * invNormFactor - mean * invNormFactor;
+        v = v * scale + bias;
+
+        Optr[threadIdx] = v;
+    }
+}
+#endif
+

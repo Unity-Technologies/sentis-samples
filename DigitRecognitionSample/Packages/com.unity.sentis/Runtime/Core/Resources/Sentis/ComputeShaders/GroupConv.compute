@@ -1,0 +1,240 @@
+#pragma kernel GroupedConv3D GCONV_KERNEL_NAME=GroupedConv3D GCONV3D
+#pragma kernel GroupedConv2D GCONV_KERNEL_NAME=GroupedConv2D GCONV2D
+#pragma kernel GroupedConv1D GCONV_KERNEL_NAME=GroupedConv1D GCONV1D
+
+#pragma kernel GroupedConv3D_GroupLower64 GCONV_KERNEL_NAME=GroupedConv3D_GroupLower64 GCONV3D GROUP_LOWER_64
+#pragma kernel GroupedConv2D_GroupLower64 GCONV_KERNEL_NAME=GroupedConv2D_GroupLower64 GCONV2D GROUP_LOWER_64
+#pragma kernel GroupedConv1D_GroupLower64 GCONV_KERNEL_NAME=GroupedConv1D_GroupLower64 GCONV1D GROUP_LOWER_64
+
+#pragma multi_compile _ USEBIAS
+
+#include "Tensor.cginc"
+
+StructuredBuffer<float> Xptr;
+StructuredBuffer<float> Kptr;
+StructuredBuffer<float> Bptr;
+RWStructuredBuffer<float> Optr;
+
+uint4 _Pad;
+uint4 _Stride;
+uint4 _Dilation;
+uint _Groups;
+
+uint O_channels, O_depth, O_height, O_width;
+uint X_channels, X_depth, X_height, X_width;
+uint K_depth, K_height, K_width;
+uint strideX;
+uint strideO;
+uint strideK;
+uint inputGroupedChannels;
+uint outputGroupedChannels;
+
+#define BLOCK_SIZE 4
+#define CACHE_DEPTH 16 // This kernel code supports only CACHE_DEPTH=16, this value can not be changed
+groupshared float LDS_W[CACHE_DEPTH * 65];
+#ifdef GROUP_LOWER_64
+groupshared float LDS_X[CACHE_DEPTH * 65];
+#endif
+
+[numthreads(16, 16, 1)]
+void GCONV_KERNEL_NAME(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV_GroupThreadID, uint threadIndex : SV_GroupIndex, uint3 groupID : SV_GroupID)
+{
+    uint x = dispatchThreadID.x * BLOCK_SIZE; // output_channels
+    uint y = dispatchThreadID.y * BLOCK_SIZE; // batch*depth*width*height
+    uint tx = groupThreadID.x;
+    uint ty = groupThreadID.y;
+    uint bx = (16 * groupID.x) * BLOCK_SIZE;
+    uint by = (16 * groupID.y) * BLOCK_SIZE;
+    uint ti = threadIndex;
+
+    uint batchReadOffset = dispatchThreadID.z * X_channels * strideX;
+    uint batchWriteOffset = dispatchThreadID.z * O_channels * strideO;
+
+    uint4 centroidId = y + uint4(0, 1, 2, 3);
+#if defined(GCONV3D)
+    uint4 topX = (centroidId % O_width) * _Stride.z;
+    centroidId /= O_width;
+    uint4 topY = (centroidId % O_height) * _Stride.y;
+    centroidId /= O_height;
+    uint4 topD = centroidId * _Stride.x;
+#elif defined(GCONV2D)
+    uint4 topX = (centroidId % O_width) * _Stride.y;
+    centroidId /= O_width;
+    uint4 topY = centroidId * _Stride.x;
+#elif defined(GCONV1D)
+    uint4 topX = centroidId * _Stride.x;
+#endif
+
+    uint4 featureBaseId = bx + ((ti & 15) << 2 | uint4(0, 1, 2, 3));
+    uint4 readK = (featureBaseId * inputGroupedChannels + (ti / 16)) * strideK;
+    #ifdef GROUP_LOWER_64
+    uint channelsX = (bx / outputGroupedChannels) * inputGroupedChannels;
+    uint readChannelsX = channelsX * strideX;
+    #else
+    uint4 channelsX = (featureBaseId / outputGroupedChannels) * inputGroupedChannels;
+    uint4 readChannelsX = channelsX * strideX;
+    #endif
+
+    #ifdef USEBIAS
+    float4 dst0 = Bptr[x | 0];
+    float4 dst1 = Bptr[x | 1];
+    float4 dst2 = Bptr[x | 2];
+    float4 dst3 = Bptr[x | 3];
+    #else
+    float4 dst0 = 0;
+    float4 dst1 = 0;
+    float4 dst2 = 0;
+    float4 dst3 = 0;
+    #endif
+
+    uint weightOffsetK = 0;
+    #if defined(GCONV3D)
+    for (uint dd = 0; dd < K_depth; ++dd)
+    for (uint dy = 0; dy < K_height; ++dy)
+    for (uint dx = 0; dx < K_width; ++dx)
+    #elif defined(GCONV2D)
+    for (uint dy = 0; dy < K_height; ++dy)
+    for (uint dx = 0; dx < K_width; ++dx)
+    #elif defined(GCONV1D)
+    for (uint dx = 0; dx < K_width; ++dx)
+    #endif
+    {
+        bool4 maskX;
+        uint4 kernelOffsetX;
+        #if defined(GCONV3D)
+        uint4 kernelOffsetXD = topD + _Dilation.x * dd - _Pad.x;
+        uint4 kernelOffsetXH = topY + _Dilation.y * dy - _Pad.y;
+        uint4 kernelOffsetXW = topX + _Dilation.z * dx - _Pad.z;
+
+        kernelOffsetX = kernelOffsetXD * X_height * X_width + kernelOffsetXH * X_width + kernelOffsetXW;
+        maskX = (kernelOffsetXW < X_width) && (kernelOffsetXH < X_height) && (kernelOffsetXD < X_depth);
+        #elif defined(GCONV2D)
+        uint4 kernelOffsetXH = topY + _Dilation.x * dy - _Pad.x;
+        uint4 kernelOffsetXW = topX + _Dilation.y * dx - _Pad.y;
+
+        kernelOffsetX = kernelOffsetXH * X_width + kernelOffsetXW;
+        maskX = (kernelOffsetXH < X_height) && (kernelOffsetXW < X_width);
+        #elif defined(GCONV1D)
+        uint4 kernelOffsetXW = topX + _Dilation.x * dx - _Pad.x;
+
+        kernelOffsetX = kernelOffsetXW;
+        maskX = (kernelOffsetXW < X_width);
+        #endif
+
+        for (uint i = 0; i < inputGroupedChannels; i += CACHE_DEPTH)
+        {
+            bool maskChannelsK = (i + (ti / 16)) < inputGroupedChannels;
+
+            LDS_W[(ti >> 4) * 65 + (((ti & 15) << 2) | 0)] = maskChannelsK ? Kptr[readK.x + i * strideK + weightOffsetK] : 0.0f;
+            LDS_W[(ti >> 4) * 65 + (((ti & 15) << 2) | 1)] = maskChannelsK ? Kptr[readK.y + i * strideK + weightOffsetK] : 0.0f;
+            LDS_W[(ti >> 4) * 65 + (((ti & 15) << 2) | 2)] = maskChannelsK ? Kptr[readK.z + i * strideK + weightOffsetK] : 0.0f;
+            LDS_W[(ti >> 4) * 65 + (((ti & 15) << 2) | 3)] = maskChannelsK ? Kptr[readK.w + i * strideK + weightOffsetK] : 0.0f;
+
+            #ifdef GROUP_LOWER_64
+            bool maskChannelsX = (channelsX + i + (ti % 16)) < X_channels;
+
+            LDS_X[(ti >> 4) * 65 + ((ti & 15) * 4 | 0)] = maskChannelsX && maskX.x ? Xptr[batchReadOffset + (i + (ti % 16)) * strideX + readChannelsX + kernelOffsetX.x] : 0.0f;
+            LDS_X[(ti >> 4) * 65 + ((ti & 15) * 4 | 1)] = maskChannelsX && maskX.y ? Xptr[batchReadOffset + (i + (ti % 16)) * strideX + readChannelsX + kernelOffsetX.y] : 0.0f;
+            LDS_X[(ti >> 4) * 65 + ((ti & 15) * 4 | 2)] = maskChannelsX && maskX.z ? Xptr[batchReadOffset + (i + (ti % 16)) * strideX + readChannelsX + kernelOffsetX.z] : 0.0f;
+            LDS_X[(ti >> 4) * 65 + ((ti & 15) * 4 | 3)] = maskChannelsX && maskX.w ? Xptr[batchReadOffset + (i + (ti % 16)) * strideX + readChannelsX + kernelOffsetX.w] : 0.0f;
+            #endif
+            GroupMemoryBarrierWithGroupSync();
+
+            for (uint di = 0; di < CACHE_DEPTH; di++)
+            {
+                float4 srcW = float4(
+                    LDS_W[di * 65 + (((ti & 15) << 2) | 0)],
+                    LDS_W[di * 65 + (((ti & 15) << 2) | 1)],
+                    LDS_W[di * 65 + (((ti & 15) << 2) | 2)],
+                    LDS_W[di * 65 + (((ti & 15) << 2) | 3)]
+                    );
+
+                #ifdef GROUP_LOWER_64
+                float4 srcX = float4(
+                    LDS_X[(ti >> 4) * 65 + ((di << 2) | 0)],
+                    LDS_X[(ti >> 4) * 65 + ((di << 2) | 1)],
+                    LDS_X[(ti >> 4) * 65 + ((di << 2) | 2)],
+                    LDS_X[(ti >> 4) * 65 + ((di << 2) | 3)]
+                    );
+
+                dst0 = mad(srcX, srcW.x, dst0);
+                dst1 = mad(srcX, srcW.y, dst1);
+                dst2 = mad(srcX, srcW.z, dst2);
+                dst3 = mad(srcX, srcW.w, dst3);
+                #else
+                uint4 maskChannelsX = (channelsX + i + di) < X_channels;
+                uint4 channeOffsetX = (i + di) * strideX + readChannelsX;
+
+                float4 v0;
+                v0.x = maskChannelsX.x && maskX.x ? Xptr[batchReadOffset + channeOffsetX.x + kernelOffsetX.x] : 0.0f;
+                v0.y = maskChannelsX.x && maskX.y ? Xptr[batchReadOffset + channeOffsetX.x + kernelOffsetX.y] : 0.0f;
+                v0.z = maskChannelsX.x && maskX.z ? Xptr[batchReadOffset + channeOffsetX.x + kernelOffsetX.z] : 0.0f;
+                v0.w = maskChannelsX.x && maskX.w ? Xptr[batchReadOffset + channeOffsetX.x + kernelOffsetX.w] : 0.0f;
+
+                float4 v1;
+                v1.x = maskChannelsX.y && maskX.x ? Xptr[batchReadOffset + channeOffsetX.y + kernelOffsetX.x] : 0.0f;
+                v1.y = maskChannelsX.y && maskX.y ? Xptr[batchReadOffset + channeOffsetX.y + kernelOffsetX.y] : 0.0f;
+                v1.z = maskChannelsX.y && maskX.z ? Xptr[batchReadOffset + channeOffsetX.y + kernelOffsetX.z] : 0.0f;
+                v1.w = maskChannelsX.y && maskX.w ? Xptr[batchReadOffset + channeOffsetX.y + kernelOffsetX.w] : 0.0f;
+
+                float4 v2;
+                v2.x = maskChannelsX.z && maskX.x ? Xptr[batchReadOffset + channeOffsetX.z + kernelOffsetX.x] : 0.0f;
+                v2.y = maskChannelsX.z && maskX.y ? Xptr[batchReadOffset + channeOffsetX.z + kernelOffsetX.y] : 0.0f;
+                v2.z = maskChannelsX.z && maskX.z ? Xptr[batchReadOffset + channeOffsetX.z + kernelOffsetX.z] : 0.0f;
+                v2.w = maskChannelsX.z && maskX.w ? Xptr[batchReadOffset + channeOffsetX.z + kernelOffsetX.w] : 0.0f;
+
+                float4 v3;
+                v3.x = maskChannelsX.w && maskX.x ? Xptr[batchReadOffset + channeOffsetX.w + kernelOffsetX.x] : 0.0f;
+                v3.y = maskChannelsX.w && maskX.y ? Xptr[batchReadOffset + channeOffsetX.w + kernelOffsetX.y] : 0.0f;
+                v3.z = maskChannelsX.w && maskX.z ? Xptr[batchReadOffset + channeOffsetX.w + kernelOffsetX.z] : 0.0f;
+                v3.w = maskChannelsX.w && maskX.w ? Xptr[batchReadOffset + channeOffsetX.w + kernelOffsetX.w] : 0.0f;
+
+                dst0 = mad(v0, srcW.x, dst0);
+                dst1 = mad(v1, srcW.y, dst1);
+                dst2 = mad(v2, srcW.z, dst2);
+                dst3 = mad(v3, srcW.w, dst3);
+                #endif
+            }
+
+            GroupMemoryBarrierWithGroupSync();
+        }
+
+        weightOffsetK++;
+    }
+
+    if ((y + 0) < strideO && (x + 0) < O_channels)
+        Optr[batchWriteOffset + (x + 0) * strideO + (y + 0)] = dst0[0];
+    if ((y + 1) < strideO && (x + 0) < O_channels)
+        Optr[batchWriteOffset + (x + 0) * strideO + (y + 1)] = dst0[1];
+    if ((y + 2) < strideO && (x + 0) < O_channels)
+        Optr[batchWriteOffset + (x + 0) * strideO + (y + 2)] = dst0[2];
+    if ((y + 3) < strideO && (x + 0) < O_channels)
+        Optr[batchWriteOffset + (x + 0) * strideO + (y + 3)] = dst0[3];
+
+    if ((y + 0) < strideO && (x + 1) < O_channels)
+        Optr[batchWriteOffset + (x + 1) * strideO + (y + 0)] = dst1[0];
+    if ((y + 1) < strideO && (x + 1) < O_channels)
+        Optr[batchWriteOffset + (x + 1) * strideO + (y + 1)] = dst1[1];
+    if ((y + 2) < strideO && (x + 1) < O_channels)
+        Optr[batchWriteOffset + (x + 1) * strideO + (y + 2)] = dst1[2];
+    if ((y + 3) < strideO && (x + 1) < O_channels)
+        Optr[batchWriteOffset + (x + 1) * strideO + (y + 3)] = dst1[3];
+
+    if ((y + 0) < strideO && (x + 2) < O_channels)
+        Optr[batchWriteOffset + (x + 2) * strideO + (y + 0)] = dst2[0];
+    if ((y + 1) < strideO && (x + 2) < O_channels)
+        Optr[batchWriteOffset + (x + 2) * strideO + (y + 1)] = dst2[1];
+    if ((y + 2) < strideO && (x + 2) < O_channels)
+        Optr[batchWriteOffset + (x + 2) * strideO + (y + 2)] = dst2[2];
+    if ((y + 3) < strideO && (x + 2) < O_channels)
+        Optr[batchWriteOffset + (x + 2) * strideO + (y + 3)] = dst2[3];
+
+    if ((y + 0) < strideO && (x + 3) < O_channels)
+        Optr[batchWriteOffset + (x + 3) * strideO + (y + 0)] = dst3[0];
+    if ((y + 1) < strideO && (x + 3) < O_channels)
+        Optr[batchWriteOffset + (x + 3) * strideO + (y + 1)] = dst3[1];
+    if ((y + 2) < strideO && (x + 3) < O_channels)
+        Optr[batchWriteOffset + (x + 3) * strideO + (y + 2)] = dst3[2];
+    if ((y + 3) < strideO && (x + 3) < O_channels)
+        Optr[batchWriteOffset + (x + 3) * strideO + (y + 3)] = dst3[3];
+}

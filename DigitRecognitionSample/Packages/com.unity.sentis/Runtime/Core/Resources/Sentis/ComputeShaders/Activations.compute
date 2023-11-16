@@ -1,0 +1,56 @@
+#pragma kernel AbsFloat ABS XFLOAT OFLOAT SUFFIX=AbsFloat
+#pragma kernel NegFloat NEG XFLOAT OFLOAT SUFFIX=NegFloat
+#pragma kernel SignFloat SIGN XFLOAT OFLOAT SUFFIX=SignFloat
+#pragma kernel AbsInt ABS XINT OINT SUFFIX=AbsInt
+#pragma kernel NegInt NEG XINT OINT SUFFIX=NegInt
+#pragma kernel SignInt SIGN XINT OINT SUFFIX=SignInt
+#pragma kernel IsNaN ISNAN XFLOAT OINT SUFFIX=IsNaN
+#pragma kernel IsInf ISINF XFLOAT OINT SUFFIX=IsInf
+
+#ifdef XFLOAT
+StructuredBuffer<float> Xptr;
+#else
+StructuredBuffer<int> Xptr;
+#endif
+#ifdef OFLOAT
+RWStructuredBuffer<float> Optr;
+#else
+RWStructuredBuffer<int> Optr;
+#endif
+
+#ifdef ISINF
+bool detectNegative;
+bool detectPositive;
+#endif
+
+uint2 unrolledDispatchArgs;
+
+[numthreads(64, 1, 1)]
+void SUFFIX(uint3 dispatchThreadID : SV_DispatchThreadID)
+{
+    uint threadIdx = unrolledDispatchArgs.x * dispatchThreadID.y + dispatchThreadID.x;
+    if (threadIdx >= unrolledDispatchArgs.y)
+        return;
+
+    #if defined(XFLOAT)
+    float v = Xptr[threadIdx];
+    #else
+    int v = Xptr[threadIdx];
+    #endif
+
+    #ifdef ABS
+    Optr[threadIdx] = abs(v);
+    #endif
+    #ifdef NEG
+    Optr[threadIdx] = -v;
+    #endif
+    #ifdef SIGN
+    Optr[threadIdx] = sign(v);
+    #endif
+    #ifdef ISNAN
+    Optr[threadIdx] = isnan(v) ? 1 : 0;
+    #endif
+    #ifdef ISINF
+    Optr[threadIdx] = isinf(v) && ((v > 0 && detectPositive) || (v < 0 && detectNegative)) ? 1 : 0;
+    #endif
+}

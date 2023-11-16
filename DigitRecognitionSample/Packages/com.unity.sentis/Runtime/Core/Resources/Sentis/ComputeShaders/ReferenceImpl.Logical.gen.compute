@@ -1,0 +1,44 @@
+// This is auto-generated -- do not modify directly
+
+#pragma kernel Where WHERE
+#include "Tensor.cginc"
+
+int shapeO[8];
+int stridesO[8];
+int shapeC[8];
+int stridesC[8];
+int shapeA[8];
+int stridesA[8];
+int shapeB[8];
+int stridesB[8];
+uint2 unrolledDispatchArgs;
+int rank;
+StructuredBuffer<float> Sptr;
+StructuredBuffer<float> Bptr;
+StructuredBuffer<int> Xptr;
+RWStructuredBuffer<float> Optr;
+
+
+#ifdef WHERE
+[numthreads(64, 1, 1)]
+void Where(uint3 dispatchThreadID : SV_DispatchThreadID)
+{
+    uint threadIdx = unrolledDispatchArgs.x * dispatchThreadID.y + dispatchThreadID.x;
+    if(threadIdx >= unrolledDispatchArgs.y)
+        return;
+    {
+        int indexC = 0; int indexA = 0; int indexB = 0;
+        for (int axis = 0; axis < rank; axis++)
+        {
+            indexC += (((threadIdx / stridesO[(SHAPE_MAXRANK - 1) - axis]) % shapeO[(SHAPE_MAXRANK - 1) - axis]) % shapeC[(SHAPE_MAXRANK - 1) - axis]) * stridesC[(SHAPE_MAXRANK - 1) - axis];
+            indexA += (((threadIdx / stridesO[(SHAPE_MAXRANK - 1) - axis]) % shapeO[(SHAPE_MAXRANK - 1) - axis]) % shapeA[(SHAPE_MAXRANK - 1) - axis]) * stridesA[(SHAPE_MAXRANK - 1) - axis];
+            indexB += (((threadIdx / stridesO[(SHAPE_MAXRANK - 1) - axis]) % shapeO[(SHAPE_MAXRANK - 1) - axis]) % shapeB[(SHAPE_MAXRANK - 1) - axis]) * stridesB[(SHAPE_MAXRANK - 1) - axis];
+        }
+
+        bool cond = (Xptr[indexC] != 0);
+
+        Optr[threadIdx] = cond ? Sptr[indexA] : Bptr[indexB];
+    }
+}
+#endif
+

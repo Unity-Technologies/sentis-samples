@@ -1,0 +1,95 @@
+#pragma kernel ArgMaxFloatFirst ARGMAX FLOAT FIRST SUFFIX=ArgMaxFloatFirst
+#pragma kernel ArgMinFloatFirst ARGMIN FLOAT FIRST SUFFIX=ArgMinFloatFirst
+#pragma kernel ArgMaxFloatLast ARGMAX FLOAT LAST SUFFIX=ArgMaxFloatLast
+#pragma kernel ArgMinFloatLast ARGMIN FLOAT LAST SUFFIX=ArgMinFloatLast
+#pragma kernel ArgMaxIntFirst ARGMAX INT FIRST SUFFIX=ArgMaxIntFirst
+#pragma kernel ArgMinIntFirst ARGMIN INT FIRST SUFFIX=ArgMinIntFirst
+#pragma kernel ArgMaxIntLast ARGMAX INT LAST SUFFIX=ArgMaxIntLast
+#pragma kernel ArgMinIntLast ARGMIN INT LAST SUFFIX=ArgMinIntLast
+
+#include "Tensor.cginc"
+
+uint2 unrolledDispatchArgs;
+int innerLength;
+int reduceLength;
+
+#if defined(FLOAT)
+StructuredBuffer<float> Xptr;
+#else
+StructuredBuffer<int> Xptr;
+#endif
+RWStructuredBuffer<int> Optr;
+
+#if defined(FLOAT)
+inline float InitOp()
+{
+#if defined(ARGMAX)
+    return FLT_MIN;
+#else
+    return FLT_MAX;
+#endif
+}
+#else
+inline int InitOp()
+{
+#if defined(ARGMAX)
+    return INT_MIN;
+#else
+    return INT_MAX;
+#endif
+}
+#endif
+
+#if defined(FLOAT)
+inline void CompareOp(inout int accIdx, inout float accV, float v, int z)
+#else
+inline void CompareOp(inout int accIdx, inout int accV, int v, int z)
+#endif
+{
+#if defined(ARGMAX)
+#if defined(FIRST)
+    if (v > accV)
+#else
+    if (v >= accV)
+#endif
+#elif defined(ARGMIN)
+#if defined(FIRST)
+    if (v < accV)
+#else
+    if (v <= accV)
+#endif
+#endif
+    {
+        accV = v;
+        accIdx = z;
+    }
+}
+
+[numthreads(64, 1, 1)]
+void SUFFIX(uint3 dispatchThreadID : SV_DispatchThreadID)
+{
+    uint threadIdx = unrolledDispatchArgs.x * dispatchThreadID.y + dispatchThreadID.x;
+    if (threadIdx >= unrolledDispatchArgs.y)
+        return;
+
+    int x = threadIdx % innerLength;
+    int y = threadIdx / innerLength;
+
+    int accIdx = 0;
+    #if defined(FLOAT)
+    float accV = InitOp();
+    #else
+    int accV = InitOp();
+    #endif
+    for (int z = 0; z < reduceLength; ++z)
+    {
+        #if defined(FLOAT)
+        float v = Xptr[y * innerLength * reduceLength + z * innerLength + x];
+        #else
+        int v = Xptr[y * innerLength * reduceLength + z * innerLength + x];
+        #endif
+        CompareOp(accIdx, accV, v, z);
+    }
+
+    Optr[y * innerLength + x] = accIdx;
+}

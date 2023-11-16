@@ -1,0 +1,68 @@
+#pragma kernel ScatterNDInt
+#pragma kernel ScatterNDFloat
+#include "Tensor.cginc"
+
+uint trailing[8];
+uint reduction;
+uint updatesLength;
+uint indicesLength;
+uint indexRemapDim;
+
+StructuredBuffer<float> Uptr;
+StructuredBuffer<int> UIntptr;
+StructuredBuffer<int> Iptr;
+RWStructuredBuffer<float> Optr;
+RWStructuredBuffer<int> OIntptr;
+
+
+[numthreads(8, 8, 1)]
+void ScatterNDFloat(uint3 dispatchThreadID : SV_DispatchThreadID)
+{
+    uint k = dispatchThreadID.x;
+    uint i = dispatchThreadID.y;
+
+    if (k >= updatesLength)
+        return;
+    if (i >= indicesLength)
+        return;
+
+    uint indexO = 0;
+    for (uint j = 0; j < indexRemapDim; j++)
+    {
+        indexO += trailing[j] * Iptr[i * indexRemapDim + j];
+    }
+    float vw = Uptr[i * updatesLength + k];
+
+    if (reduction == 0)
+        Optr[indexO * updatesLength + k] = vw;
+    else if (reduction == 1)
+        Optr[indexO * updatesLength + k] += vw;
+    else if (reduction == 2)
+        Optr[indexO * updatesLength + k] *= vw;
+}
+
+[numthreads(8, 8, 1)]
+void ScatterNDInt(uint3 dispatchThreadID : SV_DispatchThreadID)
+{
+    uint k = dispatchThreadID.x;
+    uint i = dispatchThreadID.y;
+
+    if (k >= updatesLength)
+        return;
+    if (i >= indicesLength)
+        return;
+
+    uint indexO = 0;
+    for (uint j = 0; j < indexRemapDim; j++)
+    {
+        indexO += trailing[j] * Iptr[i * indexRemapDim + j];
+    }
+    int vw = UIntptr[i * updatesLength + k];
+
+    if (reduction == 0)
+        OIntptr[indexO * updatesLength + k] = vw;
+    else if (reduction == 1)
+        OIntptr[indexO * updatesLength + k] += vw;
+    else if (reduction == 2)
+        OIntptr[indexO * updatesLength + k] *= vw;
+}

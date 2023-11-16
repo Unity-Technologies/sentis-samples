@@ -1,0 +1,67 @@
+#pragma kernel LogSoftmaxEnd LOGSOFTMAXEND SOFTMAX
+#pragma kernel SoftmaxEnd SOFTMAXEND SOFTMAX
+#pragma kernel HardmaxEnd HARDMAXEND HARDMAX
+
+#include "Tensor.cginc"
+
+uint2 unrolledDispatchArgs;
+int innerLength;
+int reduceLength;
+StructuredBuffer<float> Xptr;
+#ifdef SOFTMAX
+StructuredBuffer<float> Sptr;
+StructuredBuffer<float> Bptr;
+#endif
+#ifdef HARDMAX
+StructuredBuffer<int> Bptr;
+#endif
+RWStructuredBuffer<float> Optr;
+
+#ifdef LOGSOFTMAXEND
+[numthreads(64, 1, 1)]
+void LogSoftmaxEnd(uint3 dispatchThreadID : SV_DispatchThreadID)
+{
+    uint threadIdx = unrolledDispatchArgs.x * dispatchThreadID.y + dispatchThreadID.x;
+    if(threadIdx >= unrolledDispatchArgs.y)
+        return;
+    {
+        int x = threadIdx % innerLength;
+        int z = ((threadIdx / innerLength) / reduceLength);
+
+        Optr[threadIdx] = Xptr[threadIdx] - Bptr[z * innerLength + x];
+    }
+}
+#endif
+
+#ifdef SOFTMAXEND
+[numthreads(64, 1, 1)]
+void SoftmaxEnd(uint3 dispatchThreadID : SV_DispatchThreadID)
+{
+    uint threadIdx = unrolledDispatchArgs.x * dispatchThreadID.y + dispatchThreadID.x;
+    if(threadIdx >= unrolledDispatchArgs.y)
+        return;
+    {
+        int x = threadIdx % innerLength;
+        int z = ((threadIdx / innerLength) / reduceLength);
+
+        Optr[threadIdx] = exp(Xptr[threadIdx] - Bptr[z * innerLength + x]) / Sptr[z * innerLength + x];
+    }
+}
+#endif
+
+#ifdef HARDMAXEND
+[numthreads(64, 1, 1)]
+void HardmaxEnd(uint3 dispatchThreadID : SV_DispatchThreadID)
+{
+    uint threadIdx = unrolledDispatchArgs.x * dispatchThreadID.y + dispatchThreadID.x;
+    if(threadIdx >= unrolledDispatchArgs.y)
+        return;
+    {
+        int x = threadIdx % innerLength;
+        int y = ((threadIdx / innerLength) % reduceLength);
+        int z = ((threadIdx / innerLength) / reduceLength);
+
+        Optr[threadIdx] = y == Bptr[z * innerLength + x] ? 1 : 0;
+    }
+}
+#endif

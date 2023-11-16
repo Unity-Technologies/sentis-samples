@@ -1,0 +1,53 @@
+#pragma kernel CumSumFloatForwardInclusive FLOAT FORWARD INCLUSIVE SUFFIX=CumSumFloatForwardInclusive
+#pragma kernel CumSumFloatReverseInclusive FLOAT REVERSE INCLUSIVE SUFFIX=CumSumFloatReverseInclusive
+#pragma kernel CumSumFloatForwardExclusive FLOAT FORWARD EXCLUSIVE SUFFIX=CumSumFloatForwardExclusive
+#pragma kernel CumSumFloatReverseExclusive FLOAT REVERSE EXCLUSIVE SUFFIX=CumSumFloatReverseExclusive
+#pragma kernel CumSumIntForwardInclusive INT FORWARD INCLUSIVE SUFFIX=CumSumIntForwardInclusive
+#pragma kernel CumSumIntReverseInclusive INT REVERSE INCLUSIVE SUFFIX=CumSumIntReverseInclusive
+#pragma kernel CumSumIntForwardExclusive INT FORWARD EXCLUSIVE SUFFIX=CumSumIntForwardExclusive
+#pragma kernel CumSumIntReverseExclusive INT REVERSE EXCLUSIVE SUFFIX=CumSumIntReverseExclusive
+
+#include "Tensor.cginc"
+
+uint2 unrolledDispatchArgs;
+int innerLength;
+int reduceLength;
+#ifdef FLOAT
+StructuredBuffer<float> Xptr;
+RWStructuredBuffer<float> Optr;
+#endif
+#ifdef INT
+StructuredBuffer<int> Xptr;
+RWStructuredBuffer<int> Optr;
+#endif
+
+[numthreads(64, 1, 1)]
+void SUFFIX(uint3 dispatchThreadID : SV_DispatchThreadID)
+{
+    uint threadIdx = unrolledDispatchArgs.x * dispatchThreadID.y + dispatchThreadID.x;
+    if(threadIdx >= unrolledDispatchArgs.y)
+        return;
+    int x = threadIdx % innerLength;
+    int y = threadIdx / innerLength;
+
+    #ifdef FLOAT
+    float accum = 0.0f;
+    #endif
+    #ifdef INT
+    float accum = 0;
+    #endif
+#ifdef FORWARD
+    for (int z = 0; z < reduceLength; z++)
+#else
+    for (int z = reduceLength - 1; z >= 0; z--)
+#endif
+    {
+#ifdef EXCLUSIVE
+        Optr[y * innerLength * reduceLength + z * innerLength + x] = accum;
+#endif
+        accum += Xptr[y * innerLength * reduceLength + z * innerLength + x];
+#ifdef INCLUSIVE
+        Optr[y * innerLength * reduceLength + z * innerLength + x] = accum;
+#endif
+    }
+}

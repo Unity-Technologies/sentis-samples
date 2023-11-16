@@ -1,0 +1,357 @@
+#pragma kernel DepthwiseConv2DWinograd
+#pragma kernel KernelWinoExpand
+#pragma kernel DepthwiseConv2DDirect
+#pragma multi_compile _ USEBIAS
+
+#include "Tensor.cginc"
+
+StructuredBuffer<float> Xptr;
+StructuredBuffer<float> Yptr;
+StructuredBuffer<float> Kptr;
+StructuredBuffer<float> KWEptr;
+StructuredBuffer<float> Wptr;
+StructuredBuffer<float> Bptr;
+RWStructuredBuffer<float> Optr;
+
+uint K_height, K_width;
+uint X_height, X_width;
+uint O_channels, O_height, O_width;
+
+uint4 Pad, Stride, Dilation;
+
+static const float4x4 Winograd_BT = float4x4(float4(1, 0, -1, 0), float4(0, 1, 1, 0), float4(0, -1, 1, 0), float4(0, -1, 0, 1));
+static const float4x4 Winograd_B = transpose(Winograd_BT);
+
+static const float4x3 Winograd_G = float4x3(float3(1, 0, 0), float3(0.5, 0.5, 0.5), float3(0.5, -0.5, 0.5), float3(0, 0, 1));
+static const float3x4 Winograd_GT = transpose(Winograd_G);
+
+static const float2x4 Winograd_AT = float2x4(float4(1, 1, 1, 0), float4(0, 1, -1, 1));
+static const float4x2 Winograd_A = transpose(Winograd_AT);
+
+[numthreads(128, 1, 1)]
+void KernelWinoExpand(uint3 dispatchThreadID : SV_DispatchThreadID)
+{
+    uint k = dispatchThreadID.x;
+    if (k >= O_channels)
+        return;
+
+    float3x3 g;
+    g[0][0] = Kptr[k * 3 * 3 + 0 * 3 + 0];
+    g[0][1] = Kptr[k * 3 * 3 + 0 * 3 + 1];
+    g[0][2] = Kptr[k * 3 * 3 + 0 * 3 + 2];
+    g[1][0] = Kptr[k * 3 * 3 + 1 * 3 + 0];
+    g[1][1] = Kptr[k * 3 * 3 + 1 * 3 + 1];
+    g[1][2] = Kptr[k * 3 * 3 + 1 * 3 + 2];
+    g[2][0] = Kptr[k * 3 * 3 + 2 * 3 + 0];
+    g[2][1] = Kptr[k * 3 * 3 + 2 * 3 + 1];
+    g[2][2] = Kptr[k * 3 * 3 + 2 * 3 + 2];
+    float4x4 vv = mul(Winograd_G, mul(g, Winograd_GT));
+
+    Optr[k * 4*4 + 0 * 4 + 0] = vv[0][0];
+    Optr[k * 4*4 + 0 * 4 + 1] = vv[0][1];
+    Optr[k * 4*4 + 0 * 4 + 2] = vv[0][2];
+    Optr[k * 4*4 + 0 * 4 + 3] = vv[0][3];
+    Optr[k * 4*4 + 1 * 4 + 0] = vv[1][0];
+    Optr[k * 4*4 + 1 * 4 + 1] = vv[1][1];
+    Optr[k * 4*4 + 1 * 4 + 2] = vv[1][2];
+    Optr[k * 4*4 + 1 * 4 + 3] = vv[1][3];
+    Optr[k * 4*4 + 2 * 4 + 0] = vv[2][0];
+    Optr[k * 4*4 + 2 * 4 + 1] = vv[2][1];
+    Optr[k * 4*4 + 2 * 4 + 2] = vv[2][2];
+    Optr[k * 4*4 + 2 * 4 + 3] = vv[2][3];
+    Optr[k * 4*4 + 3 * 4 + 0] = vv[3][0];
+    Optr[k * 4*4 + 3 * 4 + 1] = vv[3][1];
+    Optr[k * 4*4 + 3 * 4 + 2] = vv[3][2];
+    Optr[k * 4*4 + 3 * 4 + 3] = vv[3][3];
+}
+
+float4x4 ApplyWinnogradB(float4x4 d)
+{
+    // BT x u x B, used mathematica to express the operation using only +/-
+    //return float4x4(float4( d[0][0] - d[0][2] - d[2][0] + d[2][2],  d[0][1] + d[0][2] - d[2][1] - d[2][2], -d[0][1] + d[0][2] + d[2][1] - d[2][2], -d[0][1] + d[0][3] + d[2][1] - d[2][3]),
+    //                float4( d[1][0] - d[1][2] + d[2][0] - d[2][2],  d[1][1] + d[1][2] + d[2][1] + d[2][2], -d[1][1] + d[1][2] - d[2][1] + d[2][2], -d[1][1] + d[1][3] - d[2][1] + d[2][3]),
+    //                float4(-d[1][0] + d[1][2] + d[2][0] - d[2][2], -d[1][1] - d[1][2] + d[2][1] + d[2][2],  d[1][1] - d[1][2] - d[2][1] + d[2][2],  d[1][1] - d[1][3] - d[2][1] + d[2][3]),
+    //                float4(-d[1][0] + d[1][2] + d[3][0] - d[3][2], -d[1][1] - d[1][2] + d[3][1] + d[3][2],  d[1][1] - d[1][2] - d[3][1] + d[3][2],  d[1][1] - d[1][3] - d[3][1] + d[3][3])
+    //    );
+    // re-order operations to lower register pressure
+    float4x4 TU;
+    float4x4 U;
+    TU[0] = d[0] - d[2];
+    TU[1] = d[1] + d[2];
+    TU[2] = d[2] - d[1];
+    TU[3] = d[3] - d[1];
+
+    U[0][0] = TU[0][0] - TU[0][2];
+    U[0][1] = TU[0][1] + TU[0][2];
+    U[0][2] = TU[0][2] - TU[0][1];
+    U[0][3] = TU[0][3] - TU[0][1];
+
+    U[1][0] = TU[1][0] - TU[1][2];
+    U[1][1] = TU[1][1] + TU[1][2];
+    U[1][2] = TU[1][2] - TU[1][1];
+    U[1][3] = TU[1][3] - TU[1][1];
+
+    U[2][0] = TU[2][0] - TU[2][2];
+    U[2][1] = TU[2][1] + TU[2][2];
+    U[2][2] = TU[2][2] - TU[2][1];
+    U[2][3] = TU[2][3] - TU[2][1];
+
+    U[3][0] = TU[3][0] - TU[3][2];
+    U[3][1] = TU[3][1] + TU[3][2];
+    U[3][2] = TU[3][2] - TU[3][1];
+    U[3][3] = TU[3][3] - TU[3][1];
+
+    return U;
+}
+
+float2x2 ApplyWinnogradA(float4x4 uv)
+{
+    // A x u x A, used mathematica to express the operation using only +/-
+    // return float2x2(float2(uv[0][0] + uv[0][1] + uv[0][2] + uv[1][0] + uv[1][1] + uv[1][2] + uv[2][0] + uv[2][1] + uv[2][2], uv[0][1] - uv[0][2] + uv[0][3] + uv[1][1] - uv[1][2] + uv[1][3] + uv[2][1] - uv[2][2] + uv[2][3]),
+    //                 float2(uv[1][0] + uv[1][1] + uv[1][2] - uv[2][0] - uv[2][1] - uv[2][2] + uv[3][0] + uv[3][1] + uv[3][2], uv[1][1] - uv[1][2] + uv[1][3] - uv[2][1] + uv[2][2] - uv[2][3] + uv[3][1] - uv[3][2] + uv[3][3])
+    //                );
+    // re-order operations to lower register pressure
+    float2x4 TY;
+    float2x2 Y;
+    TY[0][0] = uv[0][0] + uv[0][1] + uv[0][2];
+    TY[0][1] = uv[1][0] + uv[1][1] + uv[1][2];
+    TY[0][2] = uv[2][0] + uv[2][1] + uv[2][2];
+    TY[0][3] = uv[3][0] + uv[3][1] + uv[3][2];
+
+    TY[1][0] = uv[0][1] - uv[0][2] + uv[0][3];
+    TY[1][1] = uv[1][1] - uv[1][2] + uv[1][3];
+    TY[1][2] = uv[2][1] - uv[2][2] + uv[2][3];
+    TY[1][3] = uv[3][1] - uv[3][2] + uv[3][3];
+
+
+    Y[0][0] = TY[0][0] + TY[0][1] + TY[0][2];
+    Y[0][1] = TY[1][0] + TY[1][1] + TY[1][2];
+    Y[1][0] = TY[0][1] - TY[0][2] + TY[0][3];
+    Y[1][1] = TY[1][1] - TY[1][2] + TY[1][3];
+
+    return Y;
+}
+
+groupshared float4x4 KWE_GS[16];
+groupshared float XW_GS[16 * 10 * 16];
+
+uint StrideX;
+uint MaxLengthX, MaxLengthK;
+uint StrideFeaturesO, StrideO;
+
+[numthreads(4,4,16)]
+void DepthwiseConv2DWinograd(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV_GroupThreadID, uint threadIndex : SV_GroupIndex, uint3 groupID : SV_GroupID)
+{
+    uint nk = dispatchThreadID.z; uint k = nk % O_channels;
+
+    KWE_GS[groupThreadID.z][groupThreadID.y][groupThreadID.x] = KWEptr[(k << 4) | (groupThreadID.y << 2) | groupThreadID.x];
+
+    uint ox = 8 * groupID.x + (groupThreadID.y * 4 + groupThreadID.x) - Pad.y;
+    uint oy[10] = { 8 * groupID.y + 0 - Pad.x,
+                    8 * groupID.y + 1 - Pad.x,
+                    8 * groupID.y + 2 - Pad.x,
+                    8 * groupID.y + 3 - Pad.x,
+                    8 * groupID.y + 4 - Pad.x,
+                    8 * groupID.y + 5 - Pad.x,
+                    8 * groupID.y + 6 - Pad.x,
+                    8 * groupID.y + 7 - Pad.x,
+                    8 * groupID.y + 8 - Pad.x,
+                    8 * groupID.y + 9 - Pad.x };
+
+    #if defined(SHADER_API_MOBILE)
+        XW_GS[groupThreadID.z * 160 + ((0 * 16) | (groupThreadID.y << 2) | groupThreadID.x)] = oy[0] < X_height && ox < X_width ? Xptr[min(nk * StrideX + oy[0] * X_width + ox, MaxLengthX)] : 0.0f;
+        XW_GS[groupThreadID.z * 160 + ((1 * 16) | (groupThreadID.y << 2) | groupThreadID.x)] = oy[1] < X_height && ox < X_width ? Xptr[min(nk * StrideX + oy[1] * X_width + ox, MaxLengthX)] : 0.0f;
+        XW_GS[groupThreadID.z * 160 + ((2 * 16) | (groupThreadID.y << 2) | groupThreadID.x)] = oy[2] < X_height && ox < X_width ? Xptr[min(nk * StrideX + oy[2] * X_width + ox, MaxLengthX)] : 0.0f;
+        XW_GS[groupThreadID.z * 160 + ((3 * 16) | (groupThreadID.y << 2) | groupThreadID.x)] = oy[3] < X_height && ox < X_width ? Xptr[min(nk * StrideX + oy[3] * X_width + ox, MaxLengthX)] : 0.0f;
+        XW_GS[groupThreadID.z * 160 + ((4 * 16) | (groupThreadID.y << 2) | groupThreadID.x)] = oy[4] < X_height && ox < X_width ? Xptr[min(nk * StrideX + oy[4] * X_width + ox, MaxLengthX)] : 0.0f;
+        XW_GS[groupThreadID.z * 160 + ((5 * 16) | (groupThreadID.y << 2) | groupThreadID.x)] = oy[5] < X_height && ox < X_width ? Xptr[min(nk * StrideX + oy[5] * X_width + ox, MaxLengthX)] : 0.0f;
+        XW_GS[groupThreadID.z * 160 + ((6 * 16) | (groupThreadID.y << 2) | groupThreadID.x)] = oy[6] < X_height && ox < X_width ? Xptr[min(nk * StrideX + oy[6] * X_width + ox, MaxLengthX)] : 0.0f;
+        XW_GS[groupThreadID.z * 160 + ((7 * 16) | (groupThreadID.y << 2) | groupThreadID.x)] = oy[7] < X_height && ox < X_width ? Xptr[min(nk * StrideX + oy[7] * X_width + ox, MaxLengthX)] : 0.0f;
+        XW_GS[groupThreadID.z * 160 + ((8 * 16) | (groupThreadID.y << 2) | groupThreadID.x)] = oy[8] < X_height && ox < X_width ? Xptr[min(nk * StrideX + oy[8] * X_width + ox, MaxLengthX)] : 0.0f;
+        XW_GS[groupThreadID.z * 160 + ((9 * 16) | (groupThreadID.y << 2) | groupThreadID.x)] = oy[9] < X_height && ox < X_width ? Xptr[min(nk * StrideX + oy[9] * X_width + ox, MaxLengthX)] : 0.0f;
+    #else
+        XW_GS[groupThreadID.z * 160 + ((0 * 16) | (groupThreadID.y << 2) | groupThreadID.x)] = oy[0] < X_height && ox < X_width ? Xptr[nk * StrideX + oy[0] * X_width + ox] : 0.0f;
+        XW_GS[groupThreadID.z * 160 + ((1 * 16) | (groupThreadID.y << 2) | groupThreadID.x)] = oy[1] < X_height && ox < X_width ? Xptr[nk * StrideX + oy[1] * X_width + ox] : 0.0f;
+        XW_GS[groupThreadID.z * 160 + ((2 * 16) | (groupThreadID.y << 2) | groupThreadID.x)] = oy[2] < X_height && ox < X_width ? Xptr[nk * StrideX + oy[2] * X_width + ox] : 0.0f;
+        XW_GS[groupThreadID.z * 160 + ((3 * 16) | (groupThreadID.y << 2) | groupThreadID.x)] = oy[3] < X_height && ox < X_width ? Xptr[nk * StrideX + oy[3] * X_width + ox] : 0.0f;
+        XW_GS[groupThreadID.z * 160 + ((4 * 16) | (groupThreadID.y << 2) | groupThreadID.x)] = oy[4] < X_height && ox < X_width ? Xptr[nk * StrideX + oy[4] * X_width + ox] : 0.0f;
+        XW_GS[groupThreadID.z * 160 + ((5 * 16) | (groupThreadID.y << 2) | groupThreadID.x)] = oy[5] < X_height && ox < X_width ? Xptr[nk * StrideX + oy[5] * X_width + ox] : 0.0f;
+        XW_GS[groupThreadID.z * 160 + ((6 * 16) | (groupThreadID.y << 2) | groupThreadID.x)] = oy[6] < X_height && ox < X_width ? Xptr[nk * StrideX + oy[6] * X_width + ox] : 0.0f;
+        XW_GS[groupThreadID.z * 160 + ((7 * 16) | (groupThreadID.y << 2) | groupThreadID.x)] = oy[7] < X_height && ox < X_width ? Xptr[nk * StrideX + oy[7] * X_width + ox] : 0.0f;
+        XW_GS[groupThreadID.z * 160 + ((8 * 16) | (groupThreadID.y << 2) | groupThreadID.x)] = oy[8] < X_height && ox < X_width ? Xptr[nk * StrideX + oy[8] * X_width + ox] : 0.0f;
+        XW_GS[groupThreadID.z * 160 + ((9 * 16) | (groupThreadID.y << 2) | groupThreadID.x)] = oy[9] < X_height && ox < X_width ? Xptr[nk * StrideX + oy[9] * X_width + ox] : 0.0f;
+    #endif
+
+    GroupMemoryBarrierWithGroupSync();
+
+    float4x4 d;
+    d[0][0] = XW_GS[groupThreadID.z * 160 + (((groupThreadID.y << 1) + 0) << 4) | ((groupThreadID.x << 1) + 0)];
+    d[0][1] = XW_GS[groupThreadID.z * 160 + (((groupThreadID.y << 1) + 0) << 4) | ((groupThreadID.x << 1) + 1)];
+    d[0][2] = XW_GS[groupThreadID.z * 160 + (((groupThreadID.y << 1) + 0) << 4) | ((groupThreadID.x << 1) + 2)];
+    d[0][3] = XW_GS[groupThreadID.z * 160 + (((groupThreadID.y << 1) + 0) << 4) | ((groupThreadID.x << 1) + 3)];
+    d[1][0] = XW_GS[groupThreadID.z * 160 + (((groupThreadID.y << 1) + 1) << 4) | ((groupThreadID.x << 1) + 0)];
+    d[1][1] = XW_GS[groupThreadID.z * 160 + (((groupThreadID.y << 1) + 1) << 4) | ((groupThreadID.x << 1) + 1)];
+    d[1][2] = XW_GS[groupThreadID.z * 160 + (((groupThreadID.y << 1) + 1) << 4) | ((groupThreadID.x << 1) + 2)];
+    d[1][3] = XW_GS[groupThreadID.z * 160 + (((groupThreadID.y << 1) + 1) << 4) | ((groupThreadID.x << 1) + 3)];
+    d[2][0] = XW_GS[groupThreadID.z * 160 + (((groupThreadID.y << 1) + 2) << 4) | ((groupThreadID.x << 1) + 0)];
+    d[2][1] = XW_GS[groupThreadID.z * 160 + (((groupThreadID.y << 1) + 2) << 4) | ((groupThreadID.x << 1) + 1)];
+    d[2][2] = XW_GS[groupThreadID.z * 160 + (((groupThreadID.y << 1) + 2) << 4) | ((groupThreadID.x << 1) + 2)];
+    d[2][3] = XW_GS[groupThreadID.z * 160 + (((groupThreadID.y << 1) + 2) << 4) | ((groupThreadID.x << 1) + 3)];
+    d[3][0] = XW_GS[groupThreadID.z * 160 + (((groupThreadID.y << 1) + 3) << 4) | ((groupThreadID.x << 1) + 0)];
+    d[3][1] = XW_GS[groupThreadID.z * 160 + (((groupThreadID.y << 1) + 3) << 4) | ((groupThreadID.x << 1) + 1)];
+    d[3][2] = XW_GS[groupThreadID.z * 160 + (((groupThreadID.y << 1) + 3) << 4) | ((groupThreadID.x << 1) + 2)];
+    d[3][3] = XW_GS[groupThreadID.z * 160 + (((groupThreadID.y << 1) + 3) << 4) | ((groupThreadID.x << 1) + 3)];
+
+    float4x4 U = ApplyWinnogradB(d);
+    float4x4 V = KWE_GS[groupThreadID.z];
+    float2x2 Y = ApplyWinnogradA(V*U);
+    #ifdef USEBIAS
+    float2x2 acc = Y + Bptr[k];
+    #else
+    float2x2 acc = Y;
+    #endif
+
+    // 4 writes per thread
+    uint2 index = dispatchThreadID.xy << 1;
+
+    #if defined(SHADER_API_MOBILE)
+    if (nk < StrideFeaturesO && (index.y | 0) < O_height && (index.x | 0) < O_width)
+        Optr[nk * StrideO + (index.y | 0) * O_width + (index.x | 0)] = acc[0][0];
+    if (nk < StrideFeaturesO && (index.y | 0) < O_height && (index.x | 1) < O_width)
+        Optr[nk * StrideO + (index.y | 0) * O_width + (index.x | 1)] = acc[0][1];
+    if (nk < StrideFeaturesO && (index.y | 1) < O_height && (index.x | 0) < O_width)
+        Optr[nk * StrideO + (index.y | 1) * O_width + (index.x | 0)] = acc[1][0];
+    if (nk < StrideFeaturesO && (index.y | 1) < O_height && (index.x | 1) < O_width)
+        Optr[nk * StrideO + (index.y | 1) * O_width + (index.x | 1)] = acc[1][1];
+    #else
+    uint storeIndex0 = (nk < StrideFeaturesO && (index.y | 0) < O_height && (index.x | 0) < O_width) ? nk * StrideO + (index.y | 0) * O_width + (index.x | 0) : 0x7fffffff;
+    uint storeIndex1 = (nk < StrideFeaturesO && (index.y | 0) < O_height && (index.x | 1) < O_width) ? nk * StrideO + (index.y | 0) * O_width + (index.x | 1) : 0x7fffffff;
+    uint storeIndex2 = (nk < StrideFeaturesO && (index.y | 1) < O_height && (index.x | 0) < O_width) ? nk * StrideO + (index.y | 1) * O_width + (index.x | 0) : 0x7fffffff;
+    uint storeIndex3 = (nk < StrideFeaturesO && (index.y | 1) < O_height && (index.x | 1) < O_width) ? nk * StrideO + (index.y | 1) * O_width + (index.x | 1) : 0x7fffffff;
+
+    Optr[storeIndex0] = acc[0][0];
+    Optr[storeIndex1] = acc[0][1];
+    Optr[storeIndex2] = acc[1][0];
+    Optr[storeIndex3] = acc[1][1];
+    #endif
+}
+
+groupshared float K_GS[16 * 4 * 4];
+
+uint K_heightDiv4, K_widthDiv4;
+uint StrideK;
+
+[numthreads(4, 4, 16)]
+void DepthwiseConv2DDirect(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV_GroupThreadID, uint threadIndex : SV_GroupIndex, uint3 groupID : SV_GroupID)
+{
+    uint nk = dispatchThreadID.z; uint k = nk % O_channels;
+    uint x = dispatchThreadID.x;
+    uint y = dispatchThreadID.y;
+
+    #ifdef USEBIAS
+    float acc = Bptr[k];
+    #else
+    float acc = 0;
+    #endif
+
+    for (uint dy = 0; dy < K_heightDiv4; ++dy)
+    for (uint dx = 0; dx < K_widthDiv4; ++dx)
+    {
+        uint ky = (dy << 2) | groupThreadID.y;
+        uint kx = (dx << 2) | groupThreadID.x;
+        #if defined(SHADER_API_MOBILE)
+        K_GS[threadIndex] = (ky < K_height && kx < K_width) ? Kptr[min(k * StrideK + (ky * K_width + kx), MaxLengthK)] : 0.0f;
+        #else
+        K_GS[threadIndex] = (ky < K_height && kx < K_width) ? Kptr[k * StrideK + (ky * K_width + kx)] : 0.0f;
+        #endif
+        GroupMemoryBarrierWithGroupSync();
+
+        float4 w0 = { K_GS[(groupThreadID.z << 4) | 0],
+                      K_GS[(groupThreadID.z << 4) | 1],
+                      K_GS[(groupThreadID.z << 4) | 2],
+                      K_GS[(groupThreadID.z << 4) | 3]
+        };
+        float4 w1 = { K_GS[(groupThreadID.z << 4) | 4],
+                      K_GS[(groupThreadID.z << 4) | 5],
+                      K_GS[(groupThreadID.z << 4) | 6],
+                      K_GS[(groupThreadID.z << 4) | 7]
+        };
+        float4 w2 = { K_GS[(groupThreadID.z << 4) | 8],
+                      K_GS[(groupThreadID.z << 4) | 9],
+                      K_GS[(groupThreadID.z << 4) | 10],
+                      K_GS[(groupThreadID.z << 4) | 11]
+        };
+        float4 w3 = { K_GS[(groupThreadID.z << 4) | 12],
+                      K_GS[(groupThreadID.z << 4) | 13],
+                      K_GS[(groupThreadID.z << 4) | 14],
+                      K_GS[(groupThreadID.z << 4) | 15]
+        };
+
+        uint oy0 = y * Stride.x + Dilation.x * ((dy << 2) | 0) - Pad.x;
+        uint oy1 = y * Stride.x + Dilation.x * ((dy << 2) | 1) - Pad.x;
+        uint oy2 = y * Stride.x + Dilation.x * ((dy << 2) | 2) - Pad.x;
+        uint oy3 = y * Stride.x + Dilation.x * ((dy << 2) | 3) - Pad.x;
+
+        uint ox0 = x * Stride.y + Dilation.y * ((dx << 2) | 0) - Pad.y;
+        uint ox1 = x * Stride.y + Dilation.y * ((dx << 2) | 1) - Pad.y;
+        uint ox2 = x * Stride.y + Dilation.y * ((dx << 2) | 2) - Pad.y;
+        uint ox3 = x * Stride.y + Dilation.y * ((dx << 2) | 3) - Pad.y;
+
+        #if defined(SHADER_API_MOBILE)
+        float4 v0 = { (oy0 < X_height && ox0 < X_width) ? Xptr[min(nk * StrideX + oy0 * X_width + ox0, MaxLengthX)] : 0.0f,
+                      (oy0 < X_height && ox1 < X_width) ? Xptr[min(nk * StrideX + oy0 * X_width + ox1, MaxLengthX)] : 0.0f,
+                      (oy0 < X_height && ox2 < X_width) ? Xptr[min(nk * StrideX + oy0 * X_width + ox2, MaxLengthX)] : 0.0f,
+                      (oy0 < X_height && ox3 < X_width) ? Xptr[min(nk * StrideX + oy0 * X_width + ox3, MaxLengthX)] : 0.0f
+        };
+        float4 v1 = { (oy1 < X_height && ox0 < X_width) ? Xptr[min(nk * StrideX + oy1 * X_width + ox0, MaxLengthX)] : 0.0f,
+                      (oy1 < X_height && ox1 < X_width) ? Xptr[min(nk * StrideX + oy1 * X_width + ox1, MaxLengthX)] : 0.0f,
+                      (oy1 < X_height && ox2 < X_width) ? Xptr[min(nk * StrideX + oy1 * X_width + ox2, MaxLengthX)] : 0.0f,
+                      (oy1 < X_height && ox3 < X_width) ? Xptr[min(nk * StrideX + oy1 * X_width + ox3, MaxLengthX)] : 0.0f
+        };
+        float4 v2 = { (oy2 < X_height && ox0 < X_width) ? Xptr[min(nk * StrideX + oy2 * X_width + ox0, MaxLengthX)] : 0.0f,
+                      (oy2 < X_height && ox1 < X_width) ? Xptr[min(nk * StrideX + oy2 * X_width + ox1, MaxLengthX)] : 0.0f,
+                      (oy2 < X_height && ox2 < X_width) ? Xptr[min(nk * StrideX + oy2 * X_width + ox2, MaxLengthX)] : 0.0f,
+                      (oy2 < X_height && ox3 < X_width) ? Xptr[min(nk * StrideX + oy2 * X_width + ox3, MaxLengthX)] : 0.0f
+        };
+        float4 v3 = { (oy3 < X_height && ox0 < X_width) ? Xptr[min(nk * StrideX + oy3 * X_width + ox0, MaxLengthX)] : 0.0f,
+                      (oy3 < X_height && ox1 < X_width) ? Xptr[min(nk * StrideX + oy3 * X_width + ox1, MaxLengthX)] : 0.0f,
+                      (oy3 < X_height && ox2 < X_width) ? Xptr[min(nk * StrideX + oy3 * X_width + ox2, MaxLengthX)] : 0.0f,
+                      (oy3 < X_height && ox3 < X_width) ? Xptr[min(nk * StrideX + oy3 * X_width + ox3, MaxLengthX)] : 0.0f
+        };
+        #else
+        float4 v0 = { (nk < StrideFeaturesO && oy0 < X_height && ox0 < X_width) ? Xptr[nk * StrideX + oy0 * X_width + ox0] : 0.0f,
+                      (nk < StrideFeaturesO && oy0 < X_height && ox1 < X_width) ? Xptr[nk * StrideX + oy0 * X_width + ox1] : 0.0f,
+                      (nk < StrideFeaturesO && oy0 < X_height && ox2 < X_width) ? Xptr[nk * StrideX + oy0 * X_width + ox2] : 0.0f,
+                      (nk < StrideFeaturesO && oy0 < X_height && ox3 < X_width) ? Xptr[nk * StrideX + oy0 * X_width + ox3] : 0.0f
+        };
+        float4 v1 = { (nk < StrideFeaturesO && oy1 < X_height && ox0 < X_width) ? Xptr[nk * StrideX + oy1 * X_width + ox0] : 0.0f,
+                      (nk < StrideFeaturesO && oy1 < X_height && ox1 < X_width) ? Xptr[nk * StrideX + oy1 * X_width + ox1] : 0.0f,
+                      (nk < StrideFeaturesO && oy1 < X_height && ox2 < X_width) ? Xptr[nk * StrideX + oy1 * X_width + ox2] : 0.0f,
+                      (nk < StrideFeaturesO && oy1 < X_height && ox3 < X_width) ? Xptr[nk * StrideX + oy1 * X_width + ox3] : 0.0f
+        };
+        float4 v2 = { (nk < StrideFeaturesO && oy2 < X_height && ox0 < X_width) ? Xptr[nk * StrideX + oy2 * X_width + ox0] : 0.0f,
+                      (nk < StrideFeaturesO && oy2 < X_height && ox1 < X_width) ? Xptr[nk * StrideX + oy2 * X_width + ox1] : 0.0f,
+                      (nk < StrideFeaturesO && oy2 < X_height && ox2 < X_width) ? Xptr[nk * StrideX + oy2 * X_width + ox2] : 0.0f,
+                      (nk < StrideFeaturesO && oy2 < X_height && ox3 < X_width) ? Xptr[nk * StrideX + oy2 * X_width + ox3] : 0.0f
+        };
+        float4 v3 = { (nk < StrideFeaturesO && oy3 < X_height && ox0 < X_width) ? Xptr[nk * StrideX + oy3 * X_width + ox0] : 0.0f,
+                      (nk < StrideFeaturesO && oy3 < X_height && ox1 < X_width) ? Xptr[nk * StrideX + oy3 * X_width + ox1] : 0.0f,
+                      (nk < StrideFeaturesO && oy3 < X_height && ox2 < X_width) ? Xptr[nk * StrideX + oy3 * X_width + ox2] : 0.0f,
+                      (nk < StrideFeaturesO && oy3 < X_height && ox3 < X_width) ? Xptr[nk * StrideX + oy3 * X_width + ox3] : 0.0f
+        };
+        #endif
+
+        acc += dot(v0, w0);
+        acc += dot(v1, w1);
+        acc += dot(v2, w2);
+        acc += dot(v3, w3);
+    }
+
+    #if defined(SHADER_API_MOBILE)
+    if (nk < StrideFeaturesO && y < O_height && x < O_width)
+        Optr[nk * StrideO + y * O_width + x] = acc;
+    #else
+    uint storeIndex = (nk < StrideFeaturesO && y < O_height && x < O_width) ? nk * StrideO + y * O_width + x : 0x7fffffff;
+    Optr[storeIndex] = acc;
+    #endif
+}

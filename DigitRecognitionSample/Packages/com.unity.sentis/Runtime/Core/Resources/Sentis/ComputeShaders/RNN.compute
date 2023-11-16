@@ -1,0 +1,104 @@
+#pragma kernel LSTMEnd
+
+#include "Tensor.cginc"
+
+StructuredBuffer<float> Pptr;
+StructuredBuffer<float> Bptr;
+StructuredBuffer<float> XsixWTptr;
+StructuredBuffer<float> HtxRTptr;
+StructuredBuffer<int> SequenceLensptr;
+RWStructuredBuffer<float> Yptr;
+RWStructuredBuffer<float> YCptr;
+RWStructuredBuffer<float> YHptr;
+
+uint seqIndex;
+uint pOffset;
+uint bOffset;
+uint xOffset;
+uint xStride;
+uint yOffset;
+uint yStride;
+
+uint hiddenSize;
+uint batchSize;
+bool inputForget;
+float clipValue;
+uint fActivation;
+float fAlpha;
+float fBeta;
+uint gActivation;
+float gAlpha;
+float gBeta;
+uint hActivation;
+float hAlpha;
+float hBeta;
+
+float Activation(float v, uint activation, float alpha, float beta)
+{
+    switch (activation)
+    {
+        case 0:
+            return 0.5f * (v + abs(v)); // Relu
+        case 1:
+            return tanh(clamp(v, -16.0f, 16.0f)); // Tanh
+        case 2:
+            return 1.0f / (1.0f + exp(clamp(-v, -60.0f, 60.0f))); // Sigmoid
+        case 3:
+            return alpha * v + beta; // Affine
+        case 4:
+            return 0.5f * ((1.0f + alpha) * v + (1.0f - alpha) * abs(v)); // LeakyRelu
+        case 5:
+            return v >= alpha ? v : 0.0f; // ThresholdedRelu
+        case 6:
+            return alpha * tanh(clamp(beta * v, -16.0f, 16.0f)); // ScaledTanh
+        case 7:
+            return max(0.0f, min(1.0f, alpha * v + beta)); // HardSigmoid
+        case 8:
+            return v >= 0 ? v : alpha * (exp(clamp(v, -60.0f, 60.0f)) - 1.0f); // Elu
+        case 9:
+            return v / (1.0f + abs(v)); // Softsign
+        case 10:
+            return log(1 + exp(-abs(v))) + max(v, 0); // Softplus
+        default:
+            return v;
+    }
+}
+
+[numthreads(8, 8, 1)]
+void LSTMEnd(uint3 dispatchThreadID : SV_DispatchThreadID)
+{
+    uint batchIndex = dispatchThreadID.x;
+    uint i = dispatchThreadID.y;
+    if (i >= hiddenSize) return;
+    if (batchIndex >= batchSize) return;
+    if ((int)seqIndex >= SequenceLensptr[batchIndex])
+    {
+        Yptr[yOffset + batchIndex * yStride + i] = 0.0f;
+        return;
+    }
+
+    float cell_t = YCptr[batchIndex * hiddenSize + i];
+
+    float gi = XsixWTptr[xOffset + batchIndex * xStride + 0 * hiddenSize + i] + HtxRTptr[(batchIndex * 4 + 0) * hiddenSize + i] + Bptr[bOffset + 0 * hiddenSize + i] + Bptr[bOffset + 4 * hiddenSize + i];
+    float go = XsixWTptr[xOffset + batchIndex * xStride + 1 * hiddenSize + i] + HtxRTptr[(batchIndex * 4 + 1) * hiddenSize + i] + Bptr[bOffset + 1 * hiddenSize + i] + Bptr[bOffset + 5 * hiddenSize + i];
+    float gf = XsixWTptr[xOffset + batchIndex * xStride + 2 * hiddenSize + i] + HtxRTptr[(batchIndex * 4 + 2) * hiddenSize + i] + Bptr[bOffset + 2 * hiddenSize + i] + Bptr[bOffset + 6 * hiddenSize + i];
+    float gc = XsixWTptr[xOffset + batchIndex * xStride + 3 * hiddenSize + i] + HtxRTptr[(batchIndex * 4 + 3) * hiddenSize + i] + Bptr[bOffset + 3 * hiddenSize + i] + Bptr[bOffset + 7 * hiddenSize + i];
+
+    float pi = Pptr[pOffset + 0 * hiddenSize + i];
+    float po = Pptr[pOffset + 1 * hiddenSize + i];
+    float pf = Pptr[pOffset + 2 * hiddenSize + i];
+
+    gi = Activation(clamp(gi + pi * cell_t, -clipValue, clipValue), fActivation, fAlpha, fBeta);
+    gf = inputForget ? 1.0f - gi : Activation(clamp(gf + pf * cell_t, -clipValue, clipValue), fActivation, fAlpha, fBeta);
+    gc = Activation(clamp(gc, -clipValue, clipValue), gActivation, gAlpha, gBeta);
+
+    cell_t = gf * cell_t + gi * gc;
+
+    go = Activation(clamp(go + po * cell_t, -clipValue, clipValue), fActivation, fAlpha, fBeta);
+
+    float hidden_t = go * Activation(cell_t, hActivation, hAlpha, hBeta);
+
+    YCptr[batchIndex * hiddenSize + i] = cell_t;
+    YHptr[batchIndex * hiddenSize + i] = hidden_t;
+    Yptr[yOffset + batchIndex * yStride + i] = hidden_t;
+}

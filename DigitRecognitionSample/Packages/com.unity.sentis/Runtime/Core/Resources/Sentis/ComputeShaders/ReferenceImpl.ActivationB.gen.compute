@@ -1,0 +1,624 @@
+// This is auto-generated -- do not modify directly
+
+#pragma kernel HardSigmoid HARDSIGMOID
+#pragma kernel Square SQUARE
+#pragma kernel Gelu GELU
+#pragma kernel Erf ERF
+#pragma kernel Celu CELU
+#pragma kernel Shrink SHRINK
+#pragma kernel ThresholdedRelu THRESHOLDEDRELU
+#pragma kernel Elu ELU
+#pragma kernel Selu SELU
+#pragma kernel Softplus SOFTPLUS
+#pragma kernel Ceil CEIL
+#pragma kernel Floor FLOOR
+#pragma kernel Round ROUND
+#pragma kernel Reciprocal RECIPROCAL
+#pragma kernel Exp EXP
+#pragma kernel Log LOG
+#pragma kernel Sqrt SQRT
+#pragma kernel Acos ACOS
+#pragma kernel Acosh ACOSH
+#pragma kernel Asin ASIN
+#pragma kernel Asinh ASINH
+#pragma kernel Atan ATAN
+#pragma kernel Atanh ATANH
+#pragma kernel Cos COS
+#pragma kernel Cosh COSH
+#pragma kernel Sin SIN
+#pragma kernel Sinh SINH
+#pragma kernel Tan TAN
+#pragma kernel Softsign SOFTSIGN
+#pragma kernel HardSwish HARDSWISH
+#include "Tensor.cginc"
+
+uint2 unrolledDispatchArgs;
+float alpha;
+float beta;
+float bias;
+float lambd;
+float gamma;
+StructuredBuffer<float> Xptr;
+RWStructuredBuffer<float> Optr;
+
+#if defined(HARDSWISH) || defined(SOFTSIGN) || defined(TAN) || defined(SINH) || defined(SIN) || defined(COSH) || defined(COS) || defined(ATANH) || defined(ATAN) || defined(ASINH) || defined(ASIN) || defined(ACOSH) || defined(ACOS) || defined(SQRT) || defined(LOG) || defined(EXP) || defined(RECIPROCAL) || defined(ROUND) || defined(FLOOR) || defined(CEIL) || defined(SOFTPLUS)
+inline float Apply(float v){
+#ifdef SOFTPLUS
+{ return log(1 + exp(-abs(v))) + max(v, 0); }
+#endif
+#ifdef CEIL
+{ return ceil(v); }
+#endif
+#ifdef FLOOR
+{ return floor(v); }
+#endif
+#ifdef ROUND
+{ return round(v); }
+#endif
+#ifdef RECIPROCAL
+{ return 1.0f / v; }
+#endif
+#ifdef EXP
+{ return exp(v); }
+#endif
+#ifdef LOG
+{ return log(v); }
+#endif
+#ifdef SQRT
+{ return sqrt(v); }
+#endif
+#ifdef ACOS
+{ return acos(v); }
+#endif
+#ifdef ACOSH
+{ return log( v + sqrt(v*v - 1.0f)); }
+#endif
+#ifdef ASIN
+{ return asin(v); }
+#endif
+#ifdef ASINH
+{ return log( v + sqrt(v*v + 1.0f)); }
+#endif
+#ifdef ATAN
+{ return atan(v); }
+#endif
+#ifdef ATANH
+{ return 0.5f * log((1.0f + v)/(1.0f - v)); }
+#endif
+#ifdef COS
+{ return cos(v); }
+#endif
+#ifdef COSH
+{ return 0.5f * (exp(v) + exp(-v)); }
+#endif
+#ifdef SIN
+{ return sin(v); }
+#endif
+#ifdef SINH
+{ return 0.5f * (exp(v) - exp(-v)); }
+#endif
+#ifdef TAN
+{ return tan(v); }
+#endif
+#ifdef SOFTSIGN
+{
+        return v / (1.0f + abs(v));
+    }
+#endif
+#ifdef HARDSWISH
+{
+        return v * max(0, min(1, 0.16666667f * v + 0.5f));
+    }
+#endif
+}
+#endif
+
+
+#ifdef HARDSIGMOID
+[numthreads(64, 1, 1)]
+void HardSigmoid(uint3 dispatchThreadID : SV_DispatchThreadID)
+{
+    uint threadIdx = unrolledDispatchArgs.x * dispatchThreadID.y + dispatchThreadID.x;
+    if(threadIdx >= unrolledDispatchArgs.y)
+        return;
+    {
+        float v = Xptr[threadIdx];
+        Optr[threadIdx] = max(0.0f, min(1.0f, alpha * v + beta));
+    }
+}
+#endif
+
+
+#ifdef SQUARE
+[numthreads(64, 1, 1)]
+void Square(uint3 dispatchThreadID : SV_DispatchThreadID)
+{
+    uint threadIdx = unrolledDispatchArgs.x * dispatchThreadID.y + dispatchThreadID.x;
+    if(threadIdx >= unrolledDispatchArgs.y)
+        return;
+    {
+        float v = Xptr[threadIdx];
+        Optr[threadIdx] = v * v;
+    }
+}
+#endif
+
+
+#ifdef GELU
+[numthreads(64, 1, 1)]
+void Gelu(uint3 dispatchThreadID : SV_DispatchThreadID)
+{
+    uint threadIdx = unrolledDispatchArgs.x * dispatchThreadID.y + dispatchThreadID.x;
+    if(threadIdx >= unrolledDispatchArgs.y)
+        return;
+    {
+        float vx = Xptr[threadIdx];
+
+        float v = vx / sqrt(2);
+
+        // Abramowitz/Stegun approximations
+        // erf(x) = -erf(-x)
+        float x = abs(v);
+
+        float p = 0.3275911f;
+        float a1 = 0.254829592f; float a2 = -0.284496736f; float a3 = 1.421413741f;
+        float a4 = -1.453152027f; float a5 = 1.061405429f;
+
+        float t = 1.0f / (1.0f + p * x);
+        float t2 = t * t;
+        float t3 = t2 * t;
+        float t4 = t3 * t;
+        float t5 = t4 * t;
+
+        float erf = sign(v) * (1 - (a1 * t + a2 * t2 + a3 * t3 + a4 * t4 + a5 * t5) * exp(-x * x));
+
+        Optr[threadIdx] = (erf + 1) * vx * 0.5f;
+
+    }
+}
+#endif
+
+
+#ifdef ERF
+[numthreads(64, 1, 1)]
+void Erf(uint3 dispatchThreadID : SV_DispatchThreadID)
+{
+    uint threadIdx = unrolledDispatchArgs.x * dispatchThreadID.y + dispatchThreadID.x;
+    if(threadIdx >= unrolledDispatchArgs.y)
+        return;
+    {
+        float v = Xptr[threadIdx];
+
+        // Abramowitz/Stegun approximations
+        // erf(x) = -erf(-x)
+        float x = abs(v);
+
+        float p = 0.3275911f;
+        float a1 = 0.254829592f; float a2 = -0.284496736f; float a3 = 1.421413741f;
+        float a4 = -1.453152027f; float a5 = 1.061405429f;
+
+        float t = 1.0f / (1.0f + p * x);
+        float t2 = t * t;
+        float t3 = t2 * t;
+        float t4 = t3 * t;
+        float t5 = t4 * t;
+
+        Optr[threadIdx] = sign(v) * (1 - (a1 * t + a2 * t2 + a3 * t3 + a4 * t4 + a5 * t5) * exp(-x * x));
+    }
+}
+#endif
+
+
+#ifdef CELU
+[numthreads(64, 1, 1)]
+void Celu(uint3 dispatchThreadID : SV_DispatchThreadID)
+{
+    uint threadIdx = unrolledDispatchArgs.x * dispatchThreadID.y + dispatchThreadID.x;
+    if(threadIdx >= unrolledDispatchArgs.y)
+        return;
+    {
+        // f(x) = max(0,x) + min(0,alpha*(exp(x/alpha)-1))
+        // https://github.com/onnx/onnx/blob/main/docs/Operators.md#Celu
+        float v = Xptr[threadIdx];
+        Optr[threadIdx] = max(0.0f, v) + min(0.0f, alpha * (exp(v / alpha) - 1.0f));
+    }
+}
+#endif
+
+
+#ifdef SHRINK
+[numthreads(64, 1, 1)]
+void Shrink(uint3 dispatchThreadID : SV_DispatchThreadID)
+{
+    uint threadIdx = unrolledDispatchArgs.x * dispatchThreadID.y + dispatchThreadID.x;
+    if(threadIdx >= unrolledDispatchArgs.y)
+        return;
+    {
+        // If x < -lambd, y = x + bias; If x > lambd, y = x - bias; Otherwise, y = 0.
+        // https://github.com/onnx/onnx/blob/main/docs/Operators.md#shrink
+        float v = Xptr[threadIdx];
+        float y = 0.0f;
+        if (v < -lambd)
+            y = v + bias;
+        else if (v > lambd)
+            y = v - bias;
+        Optr[threadIdx] = y;
+    }
+}
+#endif
+
+
+#ifdef THRESHOLDEDRELU
+[numthreads(64, 1, 1)]
+void ThresholdedRelu(uint3 dispatchThreadID : SV_DispatchThreadID)
+{
+    uint threadIdx = unrolledDispatchArgs.x * dispatchThreadID.y + dispatchThreadID.x;
+    if(threadIdx >= unrolledDispatchArgs.y)
+        return;
+    {
+        // y = x for x > alpha, y = 0 otherwise
+        // https://github.com/onnx/onnx/blob/main/docs/Operators.md#thresholdedrelu
+        float v = Xptr[threadIdx];
+        float y = 0.0f;
+        if (v > alpha)
+            y = v;
+        Optr[threadIdx] = y;
+    }
+}
+#endif
+
+
+#ifdef ELU
+[numthreads(64, 1, 1)]
+void Elu(uint3 dispatchThreadID : SV_DispatchThreadID)
+{
+    uint threadIdx = unrolledDispatchArgs.x * dispatchThreadID.y + dispatchThreadID.x;
+    if(threadIdx >= unrolledDispatchArgs.y)
+        return;
+    {
+        // f(x) = alpha * (exp(x) - 1.) for x < 0, f(x) = x for x >= 0
+        // "Fast and Accurate Deep Network Learning by Exponential Linear Units (ELUs)", DA Clevert, 2015
+        // https://arxiv.org/abs/1511.07289
+        float v = Xptr[threadIdx];
+        if (v <= 0.0f)
+            v = alpha * (exp(v) - 1.0f);
+        Optr[threadIdx] = v;
+    }
+}
+#endif
+
+
+#ifdef SELU
+[numthreads(64, 1, 1)]
+void Selu(uint3 dispatchThreadID : SV_DispatchThreadID)
+{
+    uint threadIdx = unrolledDispatchArgs.x * dispatchThreadID.y + dispatchThreadID.x;
+    if(threadIdx >= unrolledDispatchArgs.y)
+        return;
+    {
+        // f(x) = gamma * (alpha * e^x - alpha) for x <= 0, f(x) = gamma * x for x > 0
+        float v = Xptr[threadIdx];
+        if (v <= 0.0f)
+            v = gamma * (alpha * exp(v) - alpha);
+        else
+            v = gamma * v;
+        Optr[threadIdx] = v;
+    }
+}
+#endif
+
+
+#ifdef SOFTPLUS
+[numthreads(64, 1, 1)]
+void Softplus(uint3 dispatchThreadID : SV_DispatchThreadID)
+{
+    uint threadIdx = unrolledDispatchArgs.x * dispatchThreadID.y + dispatchThreadID.x;
+    if(threadIdx >= unrolledDispatchArgs.y)
+        return;
+    {
+        float v = Xptr[threadIdx];
+        Optr[threadIdx] = Apply(v);
+    }
+}
+#endif
+
+
+#ifdef CEIL
+[numthreads(64, 1, 1)]
+void Ceil(uint3 dispatchThreadID : SV_DispatchThreadID)
+{
+    uint threadIdx = unrolledDispatchArgs.x * dispatchThreadID.y + dispatchThreadID.x;
+    if(threadIdx >= unrolledDispatchArgs.y)
+        return;
+    {
+        float v = Xptr[threadIdx];
+        Optr[threadIdx] = Apply(v);
+    }
+}
+#endif
+
+
+#ifdef FLOOR
+[numthreads(64, 1, 1)]
+void Floor(uint3 dispatchThreadID : SV_DispatchThreadID)
+{
+    uint threadIdx = unrolledDispatchArgs.x * dispatchThreadID.y + dispatchThreadID.x;
+    if(threadIdx >= unrolledDispatchArgs.y)
+        return;
+    {
+        float v = Xptr[threadIdx];
+        Optr[threadIdx] = Apply(v);
+    }
+}
+#endif
+
+
+#ifdef ROUND
+[numthreads(64, 1, 1)]
+void Round(uint3 dispatchThreadID : SV_DispatchThreadID)
+{
+    uint threadIdx = unrolledDispatchArgs.x * dispatchThreadID.y + dispatchThreadID.x;
+    if(threadIdx >= unrolledDispatchArgs.y)
+        return;
+    {
+        float v = Xptr[threadIdx];
+        Optr[threadIdx] = Apply(v);
+    }
+}
+#endif
+
+
+#ifdef RECIPROCAL
+[numthreads(64, 1, 1)]
+void Reciprocal(uint3 dispatchThreadID : SV_DispatchThreadID)
+{
+    uint threadIdx = unrolledDispatchArgs.x * dispatchThreadID.y + dispatchThreadID.x;
+    if(threadIdx >= unrolledDispatchArgs.y)
+        return;
+    {
+        float v = Xptr[threadIdx];
+        Optr[threadIdx] = Apply(v);
+    }
+}
+#endif
+
+
+#ifdef EXP
+[numthreads(64, 1, 1)]
+void Exp(uint3 dispatchThreadID : SV_DispatchThreadID)
+{
+    uint threadIdx = unrolledDispatchArgs.x * dispatchThreadID.y + dispatchThreadID.x;
+    if(threadIdx >= unrolledDispatchArgs.y)
+        return;
+    {
+        float v = Xptr[threadIdx];
+        Optr[threadIdx] = Apply(v);
+    }
+}
+#endif
+
+
+#ifdef LOG
+[numthreads(64, 1, 1)]
+void Log(uint3 dispatchThreadID : SV_DispatchThreadID)
+{
+    uint threadIdx = unrolledDispatchArgs.x * dispatchThreadID.y + dispatchThreadID.x;
+    if(threadIdx >= unrolledDispatchArgs.y)
+        return;
+    {
+        float v = Xptr[threadIdx];
+        Optr[threadIdx] = Apply(v);
+    }
+}
+#endif
+
+
+#ifdef SQRT
+[numthreads(64, 1, 1)]
+void Sqrt(uint3 dispatchThreadID : SV_DispatchThreadID)
+{
+    uint threadIdx = unrolledDispatchArgs.x * dispatchThreadID.y + dispatchThreadID.x;
+    if(threadIdx >= unrolledDispatchArgs.y)
+        return;
+    {
+        float v = Xptr[threadIdx];
+        Optr[threadIdx] = Apply(v);
+    }
+}
+#endif
+
+
+#ifdef ACOS
+[numthreads(64, 1, 1)]
+void Acos(uint3 dispatchThreadID : SV_DispatchThreadID)
+{
+    uint threadIdx = unrolledDispatchArgs.x * dispatchThreadID.y + dispatchThreadID.x;
+    if(threadIdx >= unrolledDispatchArgs.y)
+        return;
+    {
+        float v = Xptr[threadIdx];
+        Optr[threadIdx] = Apply(v);
+    }
+}
+#endif
+
+
+#ifdef ACOSH
+[numthreads(64, 1, 1)]
+void Acosh(uint3 dispatchThreadID : SV_DispatchThreadID)
+{
+    uint threadIdx = unrolledDispatchArgs.x * dispatchThreadID.y + dispatchThreadID.x;
+    if(threadIdx >= unrolledDispatchArgs.y)
+        return;
+    {
+        float v = Xptr[threadIdx];
+        Optr[threadIdx] = Apply(v);
+    }
+}
+#endif
+
+
+#ifdef ASIN
+[numthreads(64, 1, 1)]
+void Asin(uint3 dispatchThreadID : SV_DispatchThreadID)
+{
+    uint threadIdx = unrolledDispatchArgs.x * dispatchThreadID.y + dispatchThreadID.x;
+    if(threadIdx >= unrolledDispatchArgs.y)
+        return;
+    {
+        float v = Xptr[threadIdx];
+        Optr[threadIdx] = Apply(v);
+    }
+}
+#endif
+
+
+#ifdef ASINH
+[numthreads(64, 1, 1)]
+void Asinh(uint3 dispatchThreadID : SV_DispatchThreadID)
+{
+    uint threadIdx = unrolledDispatchArgs.x * dispatchThreadID.y + dispatchThreadID.x;
+    if(threadIdx >= unrolledDispatchArgs.y)
+        return;
+    {
+        float v = Xptr[threadIdx];
+        Optr[threadIdx] = Apply(v);
+    }
+}
+#endif
+
+
+#ifdef ATAN
+[numthreads(64, 1, 1)]
+void Atan(uint3 dispatchThreadID : SV_DispatchThreadID)
+{
+    uint threadIdx = unrolledDispatchArgs.x * dispatchThreadID.y + dispatchThreadID.x;
+    if(threadIdx >= unrolledDispatchArgs.y)
+        return;
+    {
+        float v = Xptr[threadIdx];
+        Optr[threadIdx] = Apply(v);
+    }
+}
+#endif
+
+
+#ifdef ATANH
+[numthreads(64, 1, 1)]
+void Atanh(uint3 dispatchThreadID : SV_DispatchThreadID)
+{
+    uint threadIdx = unrolledDispatchArgs.x * dispatchThreadID.y + dispatchThreadID.x;
+    if(threadIdx >= unrolledDispatchArgs.y)
+        return;
+    {
+        float v = Xptr[threadIdx];
+        Optr[threadIdx] = Apply(v);
+    }
+}
+#endif
+
+
+#ifdef COS
+[numthreads(64, 1, 1)]
+void Cos(uint3 dispatchThreadID : SV_DispatchThreadID)
+{
+    uint threadIdx = unrolledDispatchArgs.x * dispatchThreadID.y + dispatchThreadID.x;
+    if(threadIdx >= unrolledDispatchArgs.y)
+        return;
+    {
+        float v = Xptr[threadIdx];
+        Optr[threadIdx] = Apply(v);
+    }
+}
+#endif
+
+
+#ifdef COSH
+[numthreads(64, 1, 1)]
+void Cosh(uint3 dispatchThreadID : SV_DispatchThreadID)
+{
+    uint threadIdx = unrolledDispatchArgs.x * dispatchThreadID.y + dispatchThreadID.x;
+    if(threadIdx >= unrolledDispatchArgs.y)
+        return;
+    {
+        float v = Xptr[threadIdx];
+        Optr[threadIdx] = Apply(v);
+    }
+}
+#endif
+
+
+#ifdef SIN
+[numthreads(64, 1, 1)]
+void Sin(uint3 dispatchThreadID : SV_DispatchThreadID)
+{
+    uint threadIdx = unrolledDispatchArgs.x * dispatchThreadID.y + dispatchThreadID.x;
+    if(threadIdx >= unrolledDispatchArgs.y)
+        return;
+    {
+        float v = Xptr[threadIdx];
+        Optr[threadIdx] = Apply(v);
+    }
+}
+#endif
+
+
+#ifdef SINH
+[numthreads(64, 1, 1)]
+void Sinh(uint3 dispatchThreadID : SV_DispatchThreadID)
+{
+    uint threadIdx = unrolledDispatchArgs.x * dispatchThreadID.y + dispatchThreadID.x;
+    if(threadIdx >= unrolledDispatchArgs.y)
+        return;
+    {
+        float v = Xptr[threadIdx];
+        Optr[threadIdx] = Apply(v);
+    }
+}
+#endif
+
+
+#ifdef TAN
+[numthreads(64, 1, 1)]
+void Tan(uint3 dispatchThreadID : SV_DispatchThreadID)
+{
+    uint threadIdx = unrolledDispatchArgs.x * dispatchThreadID.y + dispatchThreadID.x;
+    if(threadIdx >= unrolledDispatchArgs.y)
+        return;
+    {
+        float v = Xptr[threadIdx];
+        Optr[threadIdx] = Apply(v);
+    }
+}
+#endif
+
+
+#ifdef SOFTSIGN
+[numthreads(64, 1, 1)]
+void Softsign(uint3 dispatchThreadID : SV_DispatchThreadID)
+{
+    uint threadIdx = unrolledDispatchArgs.x * dispatchThreadID.y + dispatchThreadID.x;
+    if(threadIdx >= unrolledDispatchArgs.y)
+        return;
+    {
+        float v = Xptr[threadIdx];
+        Optr[threadIdx] = Apply(v);
+    }
+}
+#endif
+
+
+#ifdef HARDSWISH
+[numthreads(64, 1, 1)]
+void HardSwish(uint3 dispatchThreadID : SV_DispatchThreadID)
+{
+    uint threadIdx = unrolledDispatchArgs.x * dispatchThreadID.y + dispatchThreadID.x;
+    if(threadIdx >= unrolledDispatchArgs.y)
+        return;
+    {
+        float v = Xptr[threadIdx];
+        Optr[threadIdx] = Apply(v);
+    }
+}
+#endif
+

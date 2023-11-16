@@ -1,0 +1,99 @@
+#pragma kernel OneHot INT
+#pragma kernel GatherND FLOAT
+
+#include "Tensor.cginc"
+
+#ifdef INT
+StructuredBuffer<int> Xptr;
+RWStructuredBuffer<int> Optr;
+#else
+StructuredBuffer<float> Xptr;
+RWStructuredBuffer<float> Optr;
+#endif
+
+StructuredBuffer<int> Bptr;
+
+uint2 unrolledDispatchArgs;
+int shapeO[8];
+int stridesO[8];
+uint rankO;
+int shapeX[8];
+int stridesX[8];
+uint rankX;
+int shapeIndices[8];
+int stridesIndices[8];
+uint rankIndices;
+
+int depth;
+int onValue;
+int offValue;
+uint stridesToAxis;
+uint axisDim;
+
+[numthreads(64, 1, 1)]
+void OneHot(uint3 dispatchThreadID : SV_DispatchThreadID)
+{
+    uint threadIdx = dispatchThreadID.x;
+
+    int j = (threadIdx / stridesToAxis) % axisDim;
+    int index = Xptr[(threadIdx - stridesToAxis * j) / axisDim + (threadIdx % stridesToAxis)];
+    index = index < 0 ? depth + index : index;
+
+    int v = (j == index) ? onValue : offValue;
+
+    Optr[threadIdx] = v;
+}
+
+uint iStart;
+uint iEndIndices;
+uint iEndX;
+uint iEndMin;
+uint iStartB;
+uint iEndB;
+
+[numthreads(64, 1, 1)]
+void GatherND(uint3 dispatchThreadID : SV_DispatchThreadID)
+{
+    uint threadIdx = unrolledDispatchArgs.x * dispatchThreadID.y + dispatchThreadID.x;
+    if (threadIdx >= unrolledDispatchArgs.y)
+        return;
+    uint itIndices = 0;
+    uint itX = 0;
+    uint i;
+
+    // iterate up to point where i < iEndIndices and i < iEndX
+    for (i = iStart; i < iEndMin; i++)
+    {
+        uint itO = (threadIdx / stridesO[i]) % shapeO[i];
+        itIndices += itO * stridesIndices[(rankO - rankIndices) + i];
+        itX += itO * stridesX[(rankO - rankX) + i];
+    }
+
+    // finish indices if iEndIndices > iEndX
+    for (i = iEndMin; i < iEndIndices; i++)
+    {
+        itIndices += ((threadIdx / stridesO[i]) % shapeO[i]) * stridesIndices[(rankO - rankIndices) + i];
+    }
+
+    // finish X if iEndX > iEndIndices
+    for (i = iEndMin; i < iEndX; i++)
+    {
+        itX += ((threadIdx / stridesO[i]) % shapeO[i]) * stridesX[(rankO - rankX) + i];
+    }
+
+    itIndices -= iStartB;
+
+    for (i = iStartB; i < iEndB; i++)
+    {
+        int index = Bptr[itIndices + i];
+        index = index < 0 ? shapeX[i] + index : index;
+        itX += index * stridesX[i];
+    }
+
+    for (; i < SHAPE_MAXRANK; i++)
+    {
+        itX += ((threadIdx / stridesO[i]) % shapeO[i]) * stridesX[i];
+    }
+
+    Optr[threadIdx] = Xptr[itX];
+}

@@ -1,0 +1,88 @@
+#pragma kernel RandomUniform RANDOM_UNIFORM
+#pragma kernel RandomNormal RANDOM_NORMAL
+#pragma kernel BernoulliFloat BERNOULLI_FLOAT
+#pragma kernel BernoulliInt BERNOULLI_INT
+
+#include "Tensor.cginc"
+#include "Random.cginc"
+
+uint lengthO;
+uint seed;
+
+#ifdef RANDOM_UNIFORM
+RWStructuredBuffer<float> Optr;
+float low;
+float high;
+
+[numthreads(64, 1, 1)]
+void RandomUniform(uint3 dispatchThreadID : SV_DispatchThreadID)
+{
+    uint threadIdx = dispatchThreadID.x;
+    if (threadIdx > lengthO)
+        return;
+    uint index = seed + threadIdx;
+    // index may not be uint.MaxValue, in this case move to distant value
+    // following Unity.Mathematics.Random
+    uint randomState = WangHash((index != 4294967295u ? index : 2147483647u) + 62u);
+    randomState = NextState(randomState);
+    Optr[threadIdx] = low + (high - low) * ToFloat(randomState);
+}
+#endif
+
+#ifdef RANDOM_NORMAL
+RWStructuredBuffer<float> Optr;
+float mean;
+float scale;
+
+[numthreads(64, 1, 1)]
+void RandomNormal(uint3 dispatchThreadID : SV_DispatchThreadID)
+{
+    uint threadIdx = dispatchThreadID.x;
+    if (threadIdx > lengthO)
+        return;
+    uint index = seed + threadIdx;
+    // index may not be uint.MaxValue, in this case move to distant value
+    // following Unity.Mathematics.Random
+    uint randomState = WangHash((index != 4294967295u ? index : 2147483647u) + 62u);
+    float v = GetRandomNormal(randomState);
+    Optr[threadIdx] = mean + scale * v;
+}
+#endif
+
+#if defined BERNOULLI_FLOAT
+StructuredBuffer<float> Xptr;
+RWStructuredBuffer<float> Optr;
+
+[numthreads(64, 1, 1)]
+void BernoulliFloat(uint3 dispatchThreadID : SV_DispatchThreadID)
+{
+    uint threadIdx = dispatchThreadID.x;
+    if (threadIdx > lengthO)
+        return;
+    uint index = seed + threadIdx;
+    // index may not be uint.MaxValue, in this case move to distant value
+    // following Unity.Mathematics.Random
+    uint randomState = WangHash((index != 4294967295u ? index : 2147483647u) + 62u);
+    randomState = NextState(randomState);
+    Optr[threadIdx] = Xptr[threadIdx] > ToFloat(randomState) ? 1.0 : 0.0;
+}
+#endif
+
+#if defined BERNOULLI_INT
+StructuredBuffer<float> Xptr;
+RWStructuredBuffer<int> Optr;
+
+[numthreads(64, 1, 1)]
+void BernoulliInt(uint3 dispatchThreadID : SV_DispatchThreadID)
+{
+    uint threadIdx = dispatchThreadID.x;
+    if (threadIdx > lengthO)
+        return;
+    uint index = seed + threadIdx;
+    // index may not be uint.MaxValue, in this case move to distant value
+    // following Unity.Mathematics.Random
+    uint randomState = WangHash((index != 4294967295u ? index : 2147483647u) + 62u);
+    randomState = NextState(randomState);
+    Optr[threadIdx] = Xptr[threadIdx] > ToFloat(randomState) ? 1 : 0;
+}
+#endif

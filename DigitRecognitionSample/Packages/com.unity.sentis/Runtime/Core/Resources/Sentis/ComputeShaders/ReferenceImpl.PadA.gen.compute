@@ -1,0 +1,164 @@
+// This is auto-generated -- do not modify directly
+
+#pragma kernel PadBorderND PADBORDERND
+#pragma kernel PadReflectND PADREFLECTND
+#pragma kernel PadSymmetricND PADSYMMETRICND
+#pragma kernel PadEdgeND PADEDGEND
+#include "Tensor.cginc"
+
+int pad[16];
+int shapeO[8];
+int stridesO[8];
+int shapeX[8];
+int stridesX[8];
+uint2 unrolledDispatchArgs;
+float Beta;
+int rank;
+StructuredBuffer<float> Xptr;
+RWStructuredBuffer<float> Optr;
+
+
+#ifdef PADBORDERND
+[numthreads(64, 1, 1)]
+void PadBorderND(uint3 dispatchThreadID : SV_DispatchThreadID)
+{
+    uint threadIdx = unrolledDispatchArgs.x * dispatchThreadID.y + dispatchThreadID.x;
+    if(threadIdx >= unrolledDispatchArgs.y)
+        return;
+    {
+        int indexX = 0;
+
+        bool allInsideRegion = true;
+
+        for (int j = 0; j < rank; j++)
+        {
+            int readIdx = ((threadIdx / stridesO[(SHAPE_MAXRANK-1) - j]) % shapeO[(SHAPE_MAXRANK-1) - j]) - pad[(rank - 1) - j];
+            int croppedDim = shapeX[(SHAPE_MAXRANK-1) - j] - max(0, -pad[(2 * rank - 1) - j]);
+
+            indexX += stridesX[(SHAPE_MAXRANK-1) - j] * readIdx;
+
+            allInsideRegion = allInsideRegion && (readIdx >= 0) && (readIdx < croppedDim);
+        }
+
+        if (allInsideRegion)
+            Optr[threadIdx] = Xptr[indexX];
+        else
+            Optr[threadIdx] = Beta;
+    }
+}
+#endif
+
+
+#ifdef PADREFLECTND
+[numthreads(64, 1, 1)]
+void PadReflectND(uint3 dispatchThreadID : SV_DispatchThreadID)
+{
+    uint threadIdx = unrolledDispatchArgs.x * dispatchThreadID.y + dispatchThreadID.x;
+    if(threadIdx >= unrolledDispatchArgs.y)
+        return;
+    {
+        int indexX = 0;
+        int indexXReflect = 0;
+
+        bool allInsideRegion = true;
+        for (int j = 0; j < rank; j++)
+        {
+            int readIdx = ((threadIdx / stridesO[(SHAPE_MAXRANK-1) - j]) % shapeO[(SHAPE_MAXRANK-1) - j]) - pad[(rank - 1) - j];
+            int croppedDim = shapeX[(SHAPE_MAXRANK-1) - j] - max(0, -pad[(2 * rank - 1) - j]);
+
+            indexX += stridesX[(SHAPE_MAXRANK-1) - j] * readIdx;
+
+            int lastIdx = shapeX[(SHAPE_MAXRANK-1) - j] - 1;
+
+            allInsideRegion = allInsideRegion && (readIdx >= 0) && (readIdx < croppedDim);
+
+            if (readIdx < 0)
+                readIdx = -readIdx;
+            else if (readIdx > lastIdx)
+                readIdx = lastIdx - (readIdx - lastIdx);
+
+            indexXReflect += stridesX[(SHAPE_MAXRANK-1) - j] * min(max(readIdx, 0), lastIdx);
+        }
+
+        if (allInsideRegion)
+            Optr[threadIdx] = Xptr[indexX];
+        else
+            Optr[threadIdx] = Xptr[indexXReflect];
+    }
+}
+#endif
+
+
+#ifdef PADSYMMETRICND
+[numthreads(64, 1, 1)]
+void PadSymmetricND(uint3 dispatchThreadID : SV_DispatchThreadID)
+{
+    uint threadIdx = unrolledDispatchArgs.x * dispatchThreadID.y + dispatchThreadID.x;
+    if(threadIdx >= unrolledDispatchArgs.y)
+        return;
+    {
+        int indexX = 0;
+        int indexXSymmetric = 0;
+
+        bool allInsideRegion = true;
+        for (int j = 0; j < rank; j++)
+        {
+            int readIdx = ((threadIdx / stridesO[(SHAPE_MAXRANK-1) - j]) % shapeO[(SHAPE_MAXRANK-1) - j]) - pad[(rank - 1) - j];
+            int croppedDim = shapeX[(SHAPE_MAXRANK-1) - j] - max(0, -pad[(2 * rank - 1) - j]);
+
+            indexX += stridesX[(SHAPE_MAXRANK-1) - j] * readIdx;
+
+            allInsideRegion = allInsideRegion && (readIdx >= 0) && (readIdx < croppedDim);
+
+            int lastIdx = shapeX[(SHAPE_MAXRANK-1) - j] - 1;
+
+            if (readIdx < 0)
+                readIdx = -readIdx - 1;
+            else if (readIdx > lastIdx)
+                readIdx = lastIdx - (readIdx - lastIdx) + 1;
+
+            indexXSymmetric += stridesX[(SHAPE_MAXRANK-1) - j] * min(max(readIdx, 0), lastIdx);
+        }
+
+        if (allInsideRegion)
+            Optr[threadIdx] = Xptr[indexX];
+        else
+            Optr[threadIdx] = Xptr[indexXSymmetric];
+    }
+}
+#endif
+
+
+#ifdef PADEDGEND
+[numthreads(64, 1, 1)]
+void PadEdgeND(uint3 dispatchThreadID : SV_DispatchThreadID)
+{
+    uint threadIdx = unrolledDispatchArgs.x * dispatchThreadID.y + dispatchThreadID.x;
+    if(threadIdx >= unrolledDispatchArgs.y)
+        return;
+    {
+        int indexX = 0;
+        int indexXEdge = 0;
+
+        bool allInsideRegion = true;
+        for (int j = 0; j < rank; j++)
+        {
+            int readIdx = ((threadIdx / stridesO[(SHAPE_MAXRANK-1) - j]) % shapeO[(SHAPE_MAXRANK-1) - j]) - pad[(rank - 1) - j];
+            int croppedDim = shapeX[(SHAPE_MAXRANK-1) - j] - max(0, -pad[(2 * rank - 1) - j]);
+
+            indexX += stridesX[(SHAPE_MAXRANK-1) - j] * readIdx;
+
+            allInsideRegion = allInsideRegion && (readIdx >= 0) && (readIdx < croppedDim);
+
+            int lastIdx = shapeX[(SHAPE_MAXRANK-1) - j] - 1;
+            indexXEdge += stridesX[(SHAPE_MAXRANK-1) - j] * min(max(readIdx, 0), lastIdx);
+        }
+
+        if (allInsideRegion)
+            Optr[threadIdx] = Xptr[indexX];
+        else
+            Optr[threadIdx] = Xptr[indexXEdge];
+    }
+}
+#endif
+

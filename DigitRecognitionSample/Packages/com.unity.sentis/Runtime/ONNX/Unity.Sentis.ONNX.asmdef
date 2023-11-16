@@ -1,0 +1,20 @@
+{
+    "name": "Unity.Sentis.ONNX",
+    "rootNamespace": "",
+    "references": [
+        "Unity.Sentis",
+        "Unity.Burst",
+        "Unity.Mathematics"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": true,
+    "overrideReferences": true,
+    "precompiledReferences": [
+        "Google.Protobuf_Packed.dll"
+    ],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

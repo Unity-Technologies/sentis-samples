@@ -1,0 +1,284 @@
+#pragma kernel AveragePoolReduce REDUCEMEAN SUFFIX=AveragePoolReduce  PARTIAL
+#pragma kernel GlobalAveragePool REDUCEMEAN SUFFIX=GlobalAveragePool  GLOBAL
+#pragma kernel MaxPoolReduce REDUCEMAX  SUFFIX=MaxPoolReduce PARTIAL
+#pragma kernel GlobalMaxPool REDUCEMAX  SUFFIX=GlobalMaxPool  GLOBAL
+#pragma kernel AverageVariancePoolReduce SUFFIX_AVERAGEVAR=AverageVariancePoolReduce PARTIAL
+#pragma kernel GlobalAverageVariancePool SUFFIX_AVERAGEVAR=GlobalAverageVariancePool GLOBAL
+
+#pragma kernel ArgMaxReduce SUFFIX_ARGMAXVAR=ArgMaxReduce PARTIAL
+#pragma kernel GlobalArgMaxReduce SUFFIX_ARGMAXVAR=GlobalArgMaxReduce GLOBAL
+
+#define FLT_MAX 3.402823466e+38F
+#define FLT_MIN -3.402823466e+38F
+
+StructuredBuffer<float> Xptr;
+RWStructuredBuffer<float> Optr;
+
+uint GlobalSpatialDims;
+uint SpatialDims;
+uint SpatialDimsO;
+
+#if defined(REDUCEMAX)
+#define REDUCE_DEFAULT_VALUE -FLT_MAX
+#define REDUCE_OP(v, x) max(v, x)
+#define REDUCE_NORMALIZE(v, x) (v)
+#elif defined(REDUCEMEAN)
+#define REDUCE_DEFAULT_VALUE 0.0
+#define REDUCE_OP(v, x) (v + x)
+#else
+#define REDUCE_DEFAULT_VALUE 0.0
+#define REDUCE_OP(v, x) (v)
+#define REDUCE_NORMALIZE(v, x) (v)
+#endif
+
+#undef POOL_SIZE
+#define POOL_SIZE 64
+
+groupshared float Pool_AccumulationBuffer[POOL_SIZE];
+
+inline void PoolInternalReduce(uint gts, uint s)
+{
+    if (gts < s)
+    {
+        Pool_AccumulationBuffer[gts] = REDUCE_OP(Pool_AccumulationBuffer[gts], Pool_AccumulationBuffer[gts + s]);
+    }
+    GroupMemoryBarrierWithGroupSync();
+}
+
+[numthreads(1, POOL_SIZE, 1)]
+void SUFFIX(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV_GroupThreadID, uint3 groupId : SV_GroupID)
+{
+    uint nc = dispatchThreadID.x;
+
+    uint gts = groupThreadID.y;
+    uint gs = groupId.y;
+
+    // https://developer.download.nvidia.com/assets/cuda/files/reduction.pdf
+    uint s = gs * POOL_SIZE * 4 + gts;
+
+    float v0 = s + 0 * POOL_SIZE >= SpatialDims ? REDUCE_DEFAULT_VALUE : Xptr[nc * SpatialDims + s + 0 * POOL_SIZE];
+    float v1 = s + 1 * POOL_SIZE >= SpatialDims ? REDUCE_DEFAULT_VALUE : Xptr[nc * SpatialDims + s + 1 * POOL_SIZE];
+    float v2 = s + 2 * POOL_SIZE >= SpatialDims ? REDUCE_DEFAULT_VALUE : Xptr[nc * SpatialDims + s + 2 * POOL_SIZE];
+    float v3 = s + 3 * POOL_SIZE >= SpatialDims ? REDUCE_DEFAULT_VALUE : Xptr[nc * SpatialDims + s + 3 * POOL_SIZE];
+    Pool_AccumulationBuffer[gts] = REDUCE_OP(REDUCE_OP(v0, v1), REDUCE_OP(v2, v3));
+
+    GroupMemoryBarrierWithGroupSync();
+
+    // sequential addressing
+    // mem = [x0...xn y0..yn]
+    //     = [x0+y0...xn+yn ...]
+    // last sum saved for last
+    // following code is unrolled:
+    // for s = (POOL_SIZE) / 2; s > 1; s >>= 1
+    PoolInternalReduce(gts, 32);
+    PoolInternalReduce(gts, 16);
+    PoolInternalReduce(gts, 8);
+    PoolInternalReduce(gts, 4);
+    PoolInternalReduce(gts, 2);
+
+    if (gts == 0)
+    {
+        float v = REDUCE_OP(Pool_AccumulationBuffer[0], Pool_AccumulationBuffer[1]);
+#if defined(GLOBAL)
+#if defined(REDUCEMEAN)
+        v /= GlobalSpatialDims;
+#endif
+        Optr[nc] = v;
+#endif
+#if defined(PARTIAL)
+        Optr[nc * SpatialDimsO + gs] = v;
+#endif
+    }
+}
+
+uint IsFirstDispatch;
+
+StructuredBuffer<float> X2ptr;
+RWStructuredBuffer<float> O2ptr;
+
+#undef POOL_SIZE
+#define POOL_SIZE 64
+
+groupshared float AverageVariancePool_SumBuffer[POOL_SIZE];
+groupshared float AverageVariancePool_SumSqBuffer[POOL_SIZE];
+
+inline void AverageVarianceInternalReduce(uint gtz, uint s)
+{
+    if (gtz < s)
+    {
+        AverageVariancePool_SumBuffer[gtz]   += AverageVariancePool_SumBuffer[gtz + s];
+        AverageVariancePool_SumSqBuffer[gtz] += AverageVariancePool_SumSqBuffer[gtz + s];
+    }
+    GroupMemoryBarrierWithGroupSync();
+}
+
+[numthreads(1, POOL_SIZE, 1)]
+void SUFFIX_AVERAGEVAR(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV_GroupThreadID, uint3 groupId : SV_GroupID)
+{
+    uint nc = dispatchThreadID.x;
+
+    uint gts = groupThreadID.y;
+    uint gs = groupId.y;
+
+    // https://developer.download.nvidia.com/assets/cuda/files/reduction.pdf
+    // half the number of blocks (x and y) replaced with 4 loads
+    uint s = gs * POOL_SIZE * 4 + gts;
+
+    float v0 = s + 0 * POOL_SIZE >= SpatialDims ? 0.0 : Xptr[nc * SpatialDims + s + 0 * POOL_SIZE];
+    float v1 = s + 1 * POOL_SIZE >= SpatialDims ? 0.0 : Xptr[nc * SpatialDims + s + 1 * POOL_SIZE];
+    float v2 = s + 2 * POOL_SIZE >= SpatialDims ? 0.0 : Xptr[nc * SpatialDims + s + 2 * POOL_SIZE];
+    float v3 = s + 3 * POOL_SIZE >= SpatialDims ? 0.0 : Xptr[nc * SpatialDims + s + 3 * POOL_SIZE];
+    AverageVariancePool_SumBuffer[gts] = v0 + v1 + v2 + v3;
+
+    float w0 = s + 0 * POOL_SIZE >= SpatialDims ? 0.0 : X2ptr[nc * SpatialDims + s + 0 * POOL_SIZE];
+    float w1 = s + 1 * POOL_SIZE >= SpatialDims ? 0.0 : X2ptr[nc * SpatialDims + s + 1 * POOL_SIZE];
+    float w2 = s + 2 * POOL_SIZE >= SpatialDims ? 0.0 : X2ptr[nc * SpatialDims + s + 2 * POOL_SIZE];
+    float w3 = s + 3 * POOL_SIZE >= SpatialDims ? 0.0 : X2ptr[nc * SpatialDims + s + 3 * POOL_SIZE];
+
+    if (IsFirstDispatch)
+    {
+        // to avoid X^2 dispatch, first call squares X inplace
+        AverageVariancePool_SumSqBuffer[gts]  = w0 * w0 + w1 * w1 + w2 * w2 + w3 * w3;
+    }
+    else
+    {
+        AverageVariancePool_SumSqBuffer[gts] = w0 + w1 + w2 + w3;
+    }
+    GroupMemoryBarrierWithGroupSync();
+
+    // sequential addressing
+    // mem = [x0...xn y0..yn]
+    //     = [x0+y0...xn+yn ...]
+    // last sum saved for last
+    // following code is unrolled:
+    // for s = (POOL_SIZE) / 2; s > 1; s >>= 1
+    AverageVarianceInternalReduce(gts, 32);
+    AverageVarianceInternalReduce(gts, 16);
+    AverageVarianceInternalReduce(gts, 8);
+    AverageVarianceInternalReduce(gts, 4);
+    AverageVarianceInternalReduce(gts, 2);
+
+    if (gts == 0)
+    {
+        float v  = AverageVariancePool_SumBuffer[0]   + AverageVariancePool_SumBuffer[1];
+        float v2 = AverageVariancePool_SumSqBuffer[0] + AverageVariancePool_SumSqBuffer[1];
+
+#if defined(GLOBAL)
+        v /= GlobalSpatialDims;
+        v2 /= GlobalSpatialDims;
+        v2 = v2 - v * v;
+        Optr[2*nc+0] = v;
+        Optr[2*nc+1] = v2;
+#endif
+#if defined(PARTIAL)
+        Optr[nc * SpatialDimsO + gs] = v;
+        O2ptr[nc * SpatialDimsO + gs] = v2;
+#endif
+    }
+}
+
+
+StructuredBuffer<int> XIndices;
+RWStructuredBuffer<int> OIndices;
+
+#undef POOL_SIZE
+#define POOL_SIZE 64
+
+groupshared float ArgMaxPool_MaxBuffer[POOL_SIZE];
+groupshared int ArgMaxPool_IndicesBuffer[POOL_SIZE];
+
+inline void ArgMaxInternalReduce(uint gtz, uint s)
+{
+    if (gtz < s)
+    {
+        float v0 = ArgMaxPool_MaxBuffer[gtz];
+        float v1 = ArgMaxPool_MaxBuffer[gtz + s];
+        float maxValue = max(v0, v1);
+        ArgMaxPool_MaxBuffer[gtz] = maxValue;
+
+        int mask0 = (maxValue == v0) ? ~0 : 0;
+        int mask1 = ~mask0;
+        int index = (mask0 & ArgMaxPool_IndicesBuffer[gtz]) | (mask1 & ArgMaxPool_IndicesBuffer[gtz + s]);
+        ArgMaxPool_IndicesBuffer[gtz] = index;
+    }
+    GroupMemoryBarrierWithGroupSync();
+}
+
+[numthreads(1, POOL_SIZE, 1)]
+void SUFFIX_ARGMAXVAR(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV_GroupThreadID, uint3 groupId : SV_GroupID)
+{
+    uint nc = dispatchThreadID.x;
+
+    uint gts = groupThreadID.y;
+    uint gs = groupId.y;
+
+    // https://developer.download.nvidia.com/assets/cuda/files/reduction.pdf
+    // half the number of blocks (x and y) replaced with 4 loads
+    uint s = gs * POOL_SIZE * 4 + gts;
+
+    float v0 = s + 0 * POOL_SIZE >= SpatialDims ? FLT_MIN : Xptr[nc * SpatialDims + s + 0 * POOL_SIZE];
+    float v1 = s + 1 * POOL_SIZE >= SpatialDims ? FLT_MIN : Xptr[nc * SpatialDims + s + 1 * POOL_SIZE];
+    float v2 = s + 2 * POOL_SIZE >= SpatialDims ? FLT_MIN : Xptr[nc * SpatialDims + s + 2 * POOL_SIZE];
+    float v3 = s + 3 * POOL_SIZE >= SpatialDims ? FLT_MIN : Xptr[nc * SpatialDims + s + 3 * POOL_SIZE];
+    float maxValue = max(v0, max(v1, max(v2, v3)));
+    ArgMaxPool_MaxBuffer[gts] = maxValue;
+
+    int i0 = s + 0 * POOL_SIZE;
+    int i1 = s + 1 * POOL_SIZE;
+    int i2 = s + 2 * POOL_SIZE;
+    int i3 = s + 3 * POOL_SIZE;
+    
+    if (IsFirstDispatch != 1)
+    {
+        i0 = s + 0 * POOL_SIZE >= SpatialDims ? -1 : XIndices[nc * SpatialDims + s + 0 * POOL_SIZE];
+        i1 = s + 1 * POOL_SIZE >= SpatialDims ? -1 : XIndices[nc * SpatialDims + s + 1 * POOL_SIZE];
+        i2 = s + 2 * POOL_SIZE >= SpatialDims ? -1 : XIndices[nc * SpatialDims + s + 2 * POOL_SIZE];
+        i3 = s + 3 * POOL_SIZE >= SpatialDims ? -1 : XIndices[nc * SpatialDims + s + 3 * POOL_SIZE];
+    }
+
+    int mask0 = (maxValue == v0) ? ~0 : 0;
+    int mask1 = (maxValue == v1) ? ~0 : 0;
+    int mask2 = (maxValue == v2) ? ~0 : 0;
+    int mask3 = (maxValue == v3) ? ~0 : 0;
+
+    // first encounter has precedent
+     mask1 = ~mask0 & mask1;
+     mask2 = ~mask1 & mask2;
+     mask3 = ~mask2 & mask3;
+
+    int index = (mask0 & i0) | (mask1 & i1) | (mask2 & i2) | (mask3 & i3);
+    ArgMaxPool_IndicesBuffer[gts] = index;
+
+    GroupMemoryBarrierWithGroupSync();
+
+    // sequential addressing
+    // mem = [x0...xn y0..yn]
+    //     = [x0+y0...xn+yn ...]
+    // last sum saved for last
+    // following code is unrolled:
+    // for s = (POOL_SIZE) / 2; s > 1; s >>= 1
+    ArgMaxInternalReduce(gts, 32);
+    ArgMaxInternalReduce(gts, 16);
+    ArgMaxInternalReduce(gts, 8);
+    ArgMaxInternalReduce(gts, 4);
+    ArgMaxInternalReduce(gts, 2);
+
+    if (gts == 0)
+    {
+        float max0 = ArgMaxPool_MaxBuffer[0];
+        float max1 = ArgMaxPool_MaxBuffer[1];
+        maxValue = max(max0, max1);
+
+        mask0 = (maxValue == max0) ? ~0 : 0;
+        mask1 = ~mask0;
+        index = (mask0 & ArgMaxPool_IndicesBuffer[0]) | (mask1 & ArgMaxPool_IndicesBuffer[1]);
+
+#if defined(GLOBAL)
+        OIndices[nc] = index;
+#endif
+#if defined(PARTIAL)
+        Optr[nc * SpatialDimsO + gs] = maxValue;
+        OIndices[nc * SpatialDimsO + gs] = index;
+#endif
+    }
+}

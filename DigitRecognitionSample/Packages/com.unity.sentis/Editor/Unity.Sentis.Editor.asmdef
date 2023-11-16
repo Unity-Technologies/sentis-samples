@@ -1,0 +1,17 @@
+{
+    "name": "Unity.Sentis.Editor",
+    "references": [
+        "Unity.Sentis",
+        "Unity.Sentis.ONNX"
+    ],
+    "optionalUnityReferences": [],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": []
+}

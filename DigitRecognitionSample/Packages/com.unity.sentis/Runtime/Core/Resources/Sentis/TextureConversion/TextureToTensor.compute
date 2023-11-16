@@ -1,0 +1,54 @@
+#pragma kernel TextureToTensorExact SUFFIX=Exact EXACT
+#pragma kernel TextureToTensorLinear SUFFIX=Linear LINEAR
+#define FUNC_NAME_CALL(SUFFIX)  TextureToTensor##SUFFIX
+
+Texture2D X_tex2D;
+RWStructuredBuffer<float> Optr;
+
+uint O_width;
+uint O_height;
+uint O_channels;
+uint O_strideW;
+uint O_strideH;
+uint O_strideC;
+uint CoordOrigin;
+uint ChannelSwizzleR;
+uint ChannelSwizzleG;
+uint ChannelSwizzleB;
+uint ChannelSwizzleA;
+
+#ifdef LINEAR
+SamplerState LinearClampSampler;
+#endif
+
+void SetColor(uint x, uint y, float4 color)
+{
+    uint4 channelSwizzle = uint4(ChannelSwizzleR, ChannelSwizzleG, ChannelSwizzleB, ChannelSwizzleA);
+    [unroll(4)]
+    for (uint c = 0; c < O_channels; c++)
+    {
+        Optr[x * O_strideW + y * O_strideH + c * O_strideC] = color[channelSwizzle[c]];
+    }
+}
+
+[numthreads(8,8,1)]
+void FUNC_NAME_CALL(SUFFIX)(uint3 dispatchThreadID : SV_DispatchThreadID)
+{
+    uint2 O_pos = dispatchThreadID.yx;
+    uint2 O_size = int2(O_width, O_height);
+
+    if (O_pos.x >= O_size.x || O_pos.y >= O_size.y)
+        return;
+
+    if (CoordOrigin == 0) // CoordOrigin.TopLeft
+        O_pos.y = O_size.y - 1 - O_pos.y;
+
+#ifdef EXACT
+    float4 c = X_tex2D[O_pos];
+#else
+    float2 uv = ((float2)O_pos + 0.5f) / O_size;
+    float4 c = X_tex2D.SampleLevel(LinearClampSampler, uv, 0);
+#endif
+
+    SetColor(dispatchThreadID.y, dispatchThreadID.x, c);
+}

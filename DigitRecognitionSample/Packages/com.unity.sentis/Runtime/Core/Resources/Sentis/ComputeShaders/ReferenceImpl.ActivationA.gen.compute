@@ -1,0 +1,191 @@
+// This is auto-generated -- do not modify directly
+
+#pragma kernel LeakyRelu LEAKYRELU
+#pragma kernel PRelu PRELU
+#pragma kernel Swish SWISH
+#pragma kernel Clip CLIP
+#pragma kernel Relu RELU
+#pragma kernel Relu6 RELU6
+#pragma kernel Tanh TANH
+#pragma kernel Sigmoid SIGMOID
+#include "Tensor.cginc"
+
+int shapeX[8];
+int stridesX[8];
+int shapeS[8];
+int stridesS[8];
+uint2 unrolledDispatchArgs;
+float alpha;
+float f1;
+float f2;
+float gamma;
+float maxV;
+float minV;
+int rank;
+StructuredBuffer<float> Xptr;
+StructuredBuffer<float> Bptr;
+RWStructuredBuffer<float> Optr;
+
+#if defined(SIGMOID) || defined(TANH) || defined(RELU6) || defined(RELU)
+inline float Apply(float v){
+#ifdef RELU
+{ return 0.5f * (v + abs(v)); }
+#endif
+#ifdef RELU6
+{ return 0.5f * (-abs(v - 6.0f) + abs(v) + 6.0f); }
+#endif
+#ifdef TANH
+{ return tanh(clamp(v,-16.0f,16.0f));/*clamp to avoid NaNs for large values*/ }
+#endif
+#ifdef SIGMOID
+{ return 1.0f / (1.0f + exp(-v)); }
+#endif
+}
+#endif
+
+
+#ifdef LEAKYRELU
+[numthreads(64, 1, 1)]
+void LeakyRelu(uint3 dispatchThreadID : SV_DispatchThreadID)
+{
+    uint threadIdx = unrolledDispatchArgs.x * dispatchThreadID.y + dispatchThreadID.x;
+    if(threadIdx >= unrolledDispatchArgs.y)
+        return;
+    {
+        float v = Xptr[threadIdx];
+        // from Theano impl
+        // https://github.com/Theano/theano/blob/d395439aec5a6ddde8ef5c266fd976412a5c5695/theano/tensor/nnet/nnet.py#L2209-L2251
+        Optr[threadIdx] = f1 * v + f2 * abs(v);
+    }
+}
+#endif
+
+
+#ifdef PRELU
+[numthreads(64, 1, 1)]
+void PRelu(uint3 dispatchThreadID : SV_DispatchThreadID)
+{
+    uint threadIdx = unrolledDispatchArgs.x * dispatchThreadID.y + dispatchThreadID.x;
+    if(threadIdx >= unrolledDispatchArgs.y)
+        return;
+    {
+        float v = Xptr[threadIdx];
+
+        int indexS = 0;
+        for (int axis = 0; axis < rank; axis++)
+        {
+            indexS += (((threadIdx / stridesX[(SHAPE_MAXRANK-1) - axis]) % shapeX[(SHAPE_MAXRANK-1) - axis]) % shapeS[(SHAPE_MAXRANK-1) - axis]) * stridesS[(SHAPE_MAXRANK-1) - axis];
+        }
+
+        float slope = Bptr[indexS];
+
+        // from Theano impl
+        // https://github.com/Theano/theano/blob/d395439aec5a6ddde8ef5c266fd976412a5c5695/theano/tensor/nnet/nnet.py#L2209-L2251
+        // @TODO: precompute f1 and f2 for all S before this job
+        float f1 = 0.5f * (1.0f + slope);
+        float f2 = 0.5f * (1.0f - slope);
+        // NOTE: burst-1.2.3 has troubles with Math.Min/Max generating poorly vectorized and branch code
+        // Instead Math.Abs based code is used instead. (Math.Abs just flips 1 bit)
+        v = f1 * v + f2 * abs(v);
+
+        Optr[threadIdx] = v;
+    }
+}
+#endif
+
+
+#ifdef SWISH
+[numthreads(64, 1, 1)]
+void Swish(uint3 dispatchThreadID : SV_DispatchThreadID)
+{
+    uint threadIdx = unrolledDispatchArgs.x * dispatchThreadID.y + dispatchThreadID.x;
+    if(threadIdx >= unrolledDispatchArgs.y)
+        return;
+    {
+        // f(x) = sigmoid(x) * x = x / (1 + exp(-x))
+        // "Searching for Activation Functions". P Ramachandran, 2017
+        // https://arxiv.org/abs/1710.05941
+        float v = Xptr[threadIdx];
+        v = v / (1.0f + exp(-v));
+        Optr[threadIdx] = v;
+    }
+}
+#endif
+
+
+#ifdef CLIP
+[numthreads(64, 1, 1)]
+void Clip(uint3 dispatchThreadID : SV_DispatchThreadID)
+{
+    uint threadIdx = unrolledDispatchArgs.x * dispatchThreadID.y + dispatchThreadID.x;
+    if(threadIdx >= unrolledDispatchArgs.y)
+        return;
+    {
+        float v = Xptr[threadIdx];
+        // math.clamp => if the minimum value is is greater than the maximum value, the method returns the minimum value.
+        // this is not the expected behavior so changing it to minmax
+        Optr[threadIdx] = min(maxV, max(v, minV));
+    }
+}
+#endif
+
+
+#ifdef RELU
+[numthreads(64, 1, 1)]
+void Relu(uint3 dispatchThreadID : SV_DispatchThreadID)
+{
+    uint threadIdx = unrolledDispatchArgs.x * dispatchThreadID.y + dispatchThreadID.x;
+    if(threadIdx >= unrolledDispatchArgs.y)
+        return;
+    {
+        float v = Xptr[threadIdx];
+        Optr[threadIdx] = Apply(v);
+    }
+}
+#endif
+
+
+#ifdef RELU6
+[numthreads(64, 1, 1)]
+void Relu6(uint3 dispatchThreadID : SV_DispatchThreadID)
+{
+    uint threadIdx = unrolledDispatchArgs.x * dispatchThreadID.y + dispatchThreadID.x;
+    if(threadIdx >= unrolledDispatchArgs.y)
+        return;
+    {
+        float v = Xptr[threadIdx];
+        Optr[threadIdx] = Apply(v);
+    }
+}
+#endif
+
+
+#ifdef TANH
+[numthreads(64, 1, 1)]
+void Tanh(uint3 dispatchThreadID : SV_DispatchThreadID)
+{
+    uint threadIdx = unrolledDispatchArgs.x * dispatchThreadID.y + dispatchThreadID.x;
+    if(threadIdx >= unrolledDispatchArgs.y)
+        return;
+    {
+        float v = Xptr[threadIdx];
+        Optr[threadIdx] = Apply(v);
+    }
+}
+#endif
+
+
+#ifdef SIGMOID
+[numthreads(64, 1, 1)]
+void Sigmoid(uint3 dispatchThreadID : SV_DispatchThreadID)
+{
+    uint threadIdx = unrolledDispatchArgs.x * dispatchThreadID.y + dispatchThreadID.x;
+    if(threadIdx >= unrolledDispatchArgs.y)
+        return;
+    {
+        float v = Xptr[threadIdx];
+        Optr[threadIdx] = Apply(v);
+    }
+}
+#endif
+

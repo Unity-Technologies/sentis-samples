@@ -1,0 +1,204 @@
+#pragma kernel GemmT_XT_T8x8_R4x4 XT GEMM SUFFIX=GemmT_XT_T8x8_R BLOCK_SIZE=4 KERNEL_PER_TG=64
+#pragma kernel GemmT_WT_T8x8_R4x4 WT GEMM SUFFIX=GemmT_WT_T8x8_R BLOCK_SIZE=4 KERNEL_PER_TG=64
+#pragma kernel GemmT_XT_WT_T8x8_R4x4 XT WT GEMM SUFFIX=GemmT_XT_WT_T8x8_R BLOCK_SIZE=4 KERNEL_PER_TG=64
+
+float ffma(float a, float b, float c) { return dot(float2(a, c), float2(b, 1)); } //return a*b+c;} //fastfma(a,b,c); }
+
+#define FUNC_NAME_CALL(KERNEL, SIZE) KERNEL##SIZE##x##SIZE
+#define FUNC_NAME(KERNEL, SIZE) FUNC_NAME_CALL(KERNEL, SIZE)
+#define CACHE_NAME_CALL(KERNEL, SIZE, TENSOR) KERNEL##SIZE##x##SIZE##_Cache_##TENSOR
+#define CACHE_NAME(KERNEL, SIZE, TENSOR) CACHE_NAME_CALL(KERNEL, SIZE, TENSOR)
+
+StructuredBuffer<float> Xptr;
+StructuredBuffer<float> Wptr;
+RWStructuredBuffer<float> Optr;
+
+uint M, K, N;
+uint maxXIndex;
+uint maxWIndex;
+uint maxBIndex;
+
+#define KERNEL_NAME SUFFIX
+#if BLOCK_SIZE == 4
+#if KERNEL_PER_TG == 64
+#define CACHE_DEPTH 8
+groupshared float CACHE_NAME(KERNEL_NAME, BLOCK_SIZE, LDS)[2 * CACHE_DEPTH * 8 * BLOCK_SIZE];
+[numthreads(8, 8, 1)]
+void FUNC_NAME(KERNEL_NAME, BLOCK_SIZE)(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV_GroupThreadID, uint threadIndex : SV_GroupIndex, uint3 groupID : SV_GroupID)
+{
+#define LDS_ CACHE_NAME(KERNEL_NAME, BLOCK_SIZE, LDS)
+#define X_OFFSET 0
+#define W_OFFSET CACHE_DEPTH*32
+
+    uint x = dispatchThreadID.x * BLOCK_SIZE; // output_width
+    uint y = dispatchThreadID.y * BLOCK_SIZE; // output_height
+    uint tx = groupThreadID.x;
+    uint ty = groupThreadID.y;
+    uint bx = (8 * groupID.x) * BLOCK_SIZE;
+    uint by = (8 * groupID.y) * BLOCK_SIZE;
+    uint ti = threadIndex;
+
+    float4 dstA0 = 0.0f;
+    float4 dstA1 = 0.0f;
+    float4 dstA2 = 0.0f;
+    float4 dstA3 = 0.0f;
+
+    #ifdef WT
+    uint readW = (ti >> 5) + K * (bx | (ti & 31));
+    #else
+    uint readW = N * (ti >> 5) + (bx | (ti & 31));
+    #endif
+    bool maskW = (bx | (ti & 31)) < N;
+
+    uint4 centroidId = uint4(
+        (by | (ti >> 3) | 0 * 8),
+        (by | (ti >> 3) | 1 * 8),
+        (by | (ti >> 3) | 2 * 8),
+        (by | (ti >> 3) | 3 * 8));
+
+
+    #ifdef XT
+    uint4 readX = centroidId + M * (ti & 7);
+    #else
+    uint4 readX = K * centroidId + (ti & 7);
+    #endif
+    bool4 maskX = centroidId < M;
+
+    for (uint i = 0; i < K; i += CACHE_DEPTH)
+    {
+        bool4 maskNW = (ti / 32) + (i + uint4(0, 1, 2, 3) * 2) < K;
+        bool maskNX = (ti % 8) + i < K;
+
+        #if defined(SHADER_API_MOBILE)
+        #ifdef WT
+        LDS_[(0 * 64 + W_OFFSET) | (8 * (ti & 3) + (ti & 0x20)) | ((ti & 31) >> 2)] = (maskW && maskNW.x) ? Wptr[min(readW, maxWIndex)] : 0.0f;
+        readW += (K <= (i + 0 * 2) ? 0 : min(K - (i + 0 * 2), 2));
+        LDS_[(1 * 64 + W_OFFSET) | (8 * (ti & 3) + (ti & 0x20)) | ((ti & 31) >> 2)] = (maskW && maskNW.y) ? Wptr[min(readW, maxWIndex)] : 0.0f;
+        readW += (K <= (i + 1 * 2) ? 0 : min(K - (i + 1 * 2), 2));
+        LDS_[(2 * 64 + W_OFFSET) | (8 * (ti & 3) + (ti & 0x20)) | ((ti & 31) >> 2)] = (maskW && maskNW.z) ? Wptr[min(readW, maxWIndex)] : 0.0f;
+        readW += (K <= (i + 2 * 2) ? 0 : min(K - (i + 2 * 2), 2));
+        LDS_[(3 * 64 + W_OFFSET) | (8 * (ti & 3) + (ti & 0x20)) | ((ti & 31) >> 2)] = (maskW && maskNW.w) ? Wptr[min(readW, maxWIndex)] : 0.0f;
+        readW += (K <= (i + 3 * 2) ? 0 : min(K - (i + 3 * 2), 2));
+        #else
+        LDS_[(0 * 64 + W_OFFSET) | (8 * (ti & 3) + (ti & 0x20)) | ((ti & 31) >> 2)] = (maskW && maskNW.x) ? Wptr[min(readW, maxWIndex)] : 0.0f;
+        readW += N * (K <= (i + 0 * 2) ? 0 : min(K - (i + 0 * 2), 2));
+        LDS_[(1 * 64 + W_OFFSET) | (8 * (ti & 3) + (ti & 0x20)) | ((ti & 31) >> 2)] = (maskW && maskNW.y) ? Wptr[min(readW, maxWIndex)] : 0.0f;
+        readW += N * (K <= (i + 1 * 2) ? 0 : min(K - (i + 1 * 2), 2));
+        LDS_[(2 * 64 + W_OFFSET) | (8 * (ti & 3) + (ti & 0x20)) | ((ti & 31) >> 2)] = (maskW && maskNW.z) ? Wptr[min(readW, maxWIndex)] : 0.0f;
+        readW += N * (K <= (i + 2 * 2) ? 0 : min(K - (i + 2 * 2), 2));
+        LDS_[(3 * 64 + W_OFFSET) | (8 * (ti & 3) + (ti & 0x20)) | ((ti & 31) >> 2)] = (maskW && maskNW.w) ? Wptr[min(readW, maxWIndex)] : 0.0f;
+        readW += N * (K <= (i + 3 * 2) ? 0 : min(K - (i + 3 * 2), 2));
+        #endif
+
+        #ifdef XT
+        LDS_[(32 * (ti & 7) + (ti >> 3)) | (8 * 0 + X_OFFSET)] = (maskX.x && maskNX) ? Xptr[min(readX.x + M * i, maxXIndex)] : 0.0f;
+        LDS_[(32 * (ti & 7) + (ti >> 3)) | (8 * 1 + X_OFFSET)] = (maskX.y && maskNX) ? Xptr[min(readX.y + M * i, maxXIndex)] : 0.0f;
+        LDS_[(32 * (ti & 7) + (ti >> 3)) | (8 * 2 + X_OFFSET)] = (maskX.z && maskNX) ? Xptr[min(readX.z + M * i, maxXIndex)] : 0.0f;
+        LDS_[(32 * (ti & 7) + (ti >> 3)) | (8 * 3 + X_OFFSET)] = (maskX.w && maskNX) ? Xptr[min(readX.w + M * i, maxXIndex)] : 0.0f;
+        #else
+        LDS_[(32 * (ti & 7) + (ti >> 3)) | (8 * 0 + X_OFFSET)] = (maskX.x && maskNX) ? Xptr[min(readX.x + i, maxXIndex)] : 0.0f;
+        LDS_[(32 * (ti & 7) + (ti >> 3)) | (8 * 1 + X_OFFSET)] = (maskX.y && maskNX) ? Xptr[min(readX.y + i, maxXIndex)] : 0.0f;
+        LDS_[(32 * (ti & 7) + (ti >> 3)) | (8 * 2 + X_OFFSET)] = (maskX.z && maskNX) ? Xptr[min(readX.z + i, maxXIndex)] : 0.0f;
+        LDS_[(32 * (ti & 7) + (ti >> 3)) | (8 * 3 + X_OFFSET)] = (maskX.w && maskNX) ? Xptr[min(readX.w + i, maxXIndex)] : 0.0f;
+        #endif
+
+        #else
+        #ifdef WT
+        LDS_[(0 * 64 + W_OFFSET) | (8 * (ti & 3) + (ti & 0x20)) | ((ti & 31) >> 2)] = (maskW && maskNW.x) ? Wptr[readW] : 0.0f;
+        readW += (K <= (i + 0 * 2) ? 0 : min(K - (i + 0 * 2), 2));
+        LDS_[(1 * 64 + W_OFFSET) | (8 * (ti & 3) + (ti & 0x20)) | ((ti & 31) >> 2)] = (maskW && maskNW.y) ? Wptr[readW] : 0.0f;
+        readW += (K <= (i + 1 * 2) ? 0 : min(K - (i + 1 * 2), 2));
+        LDS_[(2 * 64 + W_OFFSET) | (8 * (ti & 3) + (ti & 0x20)) | ((ti & 31) >> 2)] = (maskW && maskNW.z) ? Wptr[readW] : 0.0f;
+        readW += (K <= (i + 2 * 2) ? 0 : min(K - (i + 2 * 2), 2));
+        LDS_[(3 * 64 + W_OFFSET) | (8 * (ti & 3) + (ti & 0x20)) | ((ti & 31) >> 2)] = (maskW && maskNW.w) ? Wptr[readW] : 0.0f;
+        readW += (K <= (i + 3 * 2) ? 0 : min(K - (i + 3 * 2), 2));
+        #else
+        LDS_[(0 * 64 + W_OFFSET) | (8 * (ti & 3) + (ti & 0x20)) | ((ti & 31) >> 2)] = (maskW && maskNW.x) ? Wptr[readW] : 0.0f;
+        readW += N * (K <= (i + 0 * 2) ? 0 : min(K - (i + 0 * 2), 2));
+        LDS_[(1 * 64 + W_OFFSET) | (8 * (ti & 3) + (ti & 0x20)) | ((ti & 31) >> 2)] = (maskW && maskNW.y) ? Wptr[readW] : 0.0f;
+        readW += N * (K <= (i + 1 * 2) ? 0 : min(K - (i + 1 * 2), 2));
+        LDS_[(2 * 64 + W_OFFSET) | (8 * (ti & 3) + (ti & 0x20)) | ((ti & 31) >> 2)] = (maskW && maskNW.z) ? Wptr[readW] : 0.0f;
+        readW += N * (K <= (i + 2 * 2) ? 0 : min(K - (i + 2 * 2), 2));
+        LDS_[(3 * 64 + W_OFFSET) | (8 * (ti & 3) + (ti & 0x20)) | ((ti & 31) >> 2)] = (maskW && maskNW.w) ? Wptr[readW] : 0.0f;
+        readW += N * (K <= (i + 3 * 2) ? 0 : min(K - (i + 3 * 2), 2));
+        #endif
+
+        #ifdef XT
+        LDS_[(32 * (ti & 7) + (ti >> 3)) | (8 * 0 + X_OFFSET)] = (maskX.x && maskNX) ? Xptr[readX.x + M * i] : 0.0f;
+        LDS_[(32 * (ti & 7) + (ti >> 3)) | (8 * 1 + X_OFFSET)] = (maskX.y && maskNX) ? Xptr[readX.y + M * i] : 0.0f;
+        LDS_[(32 * (ti & 7) + (ti >> 3)) | (8 * 2 + X_OFFSET)] = (maskX.z && maskNX) ? Xptr[readX.z + M * i] : 0.0f;
+        LDS_[(32 * (ti & 7) + (ti >> 3)) | (8 * 3 + X_OFFSET)] = (maskX.w && maskNX) ? Xptr[readX.w + M * i] : 0.0f;
+        #else
+        LDS_[(32 * (ti & 7) + (ti >> 3)) | (8 * 0 + X_OFFSET)] = (maskX.x && maskNX) ? Xptr[readX.x + i] : 0.0f;
+        LDS_[(32 * (ti & 7) + (ti >> 3)) | (8 * 1 + X_OFFSET)] = (maskX.y && maskNX) ? Xptr[readX.y + i] : 0.0f;
+        LDS_[(32 * (ti & 7) + (ti >> 3)) | (8 * 2 + X_OFFSET)] = (maskX.z && maskNX) ? Xptr[readX.z + i] : 0.0f;
+        LDS_[(32 * (ti & 7) + (ti >> 3)) | (8 * 3 + X_OFFSET)] = (maskX.w && maskNX) ? Xptr[readX.w + i] : 0.0f;
+        #endif
+
+        #endif
+
+
+        GroupMemoryBarrierWithGroupSync();
+
+        for (uint di = 0; di < CACHE_DEPTH; di++)
+        {
+            float4 srcX = float4(
+                LDS_[X_OFFSET + di * 32 + ty * 4 + 0],
+                LDS_[X_OFFSET + di * 32 + ty * 4 + 1],
+                LDS_[X_OFFSET + di * 32 + ty * 4 + 2],
+                LDS_[X_OFFSET + di * 32 + ty * 4 + 3]);
+            float4 srcW = float4(
+                LDS_[W_OFFSET + di * 32 + 0 * 8 + tx],
+                LDS_[W_OFFSET + di * 32 + 1 * 8 + tx],
+                LDS_[W_OFFSET + di * 32 + 2 * 8 + tx],
+                LDS_[W_OFFSET + di * 32 + 3 * 8 + tx]);
+
+            dstA0 += srcX.x * srcW;
+            dstA1 += srcX.y * srcW;
+            dstA2 += srcX.z * srcW;
+            dstA3 += srcX.w * srcW;
+        }
+
+        GroupMemoryBarrierWithGroupSync();
+    }
+
+    uint writeO = 0;
+
+    if (((y + 0) < M) && ((x + 0) < N))
+        Optr[writeO + N * (y + 0) + x + 0] = dstA0.x;
+    if (((y + 0) < M) && ((x + 1) < N))
+        Optr[writeO + N * (y + 0) + x + 1] = dstA0.y;
+    if (((y + 0) < M) && ((x + 2) < N))
+        Optr[writeO + N * (y + 0) + x + 2] = dstA0.z;
+    if (((y + 0) < M) && ((x + 3) < N))
+        Optr[writeO + N * (y + 0) + x + 3] = dstA0.w;
+
+    if (((y + 1) < M) && ((x + 0) < N))
+        Optr[writeO + N * (y + 1) + x + 0] = dstA1.x;
+    if (((y + 1) < M) && ((x + 1) < N))
+        Optr[writeO + N * (y + 1) + x + 1] = dstA1.y;
+    if (((y + 1) < M) && ((x + 2) < N))
+        Optr[writeO + N * (y + 1) + x + 2] = dstA1.z;
+    if (((y + 1) < M) && ((x + 3) < N))
+        Optr[writeO + N * (y + 1) + x + 3] = dstA1.w;
+
+    if (((y + 2) < M) && ((x + 0) < N))
+        Optr[writeO + N * (y + 2) + x + 0] = dstA2.x;
+    if (((y + 2) < M) && ((x + 1) < N))
+        Optr[writeO + N * (y + 2) + x + 1] = dstA2.y;
+    if (((y + 2) < M) && ((x + 2) < N))
+        Optr[writeO + N * (y + 2) + x + 2] = dstA2.z;
+    if (((y + 2) < M) && ((x + 3) < N))
+        Optr[writeO + N * (y + 2) + x + 3] = dstA2.w;
+
+    if (((y + 3) < M) && ((x + 0) < N))
+        Optr[writeO + N * (y + 3) + x + 0] = dstA3.x;
+    if (((y + 3) < M) && ((x + 1) < N))
+        Optr[writeO + N * (y + 3) + x + 1] = dstA3.y;
+    if (((y + 3) < M) && ((x + 2) < N))
+        Optr[writeO + N * (y + 3) + x + 2] = dstA3.z;
+    if (((y + 3) < M) && ((x + 3) < N))
+        Optr[writeO + N * (y + 3) + x + 3] = dstA3.w;
+}
+#endif
+#endif

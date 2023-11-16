@@ -1,0 +1,517 @@
+
+#pragma kernel Conv3D_T16x16_R4x4 SUFFIX=Conv3D_T16x16_R BLOCK_SIZE=4 KERNEL_PER_TG=256 CONV3D
+#pragma kernel Conv2D_T16x16_R4x4 SUFFIX=Conv2D_T16x16_R BLOCK_SIZE=4 KERNEL_PER_TG=256 CONV2D
+#pragma kernel Conv1D_T16x16_R4x4 SUFFIX=Conv1D_T16x16_R BLOCK_SIZE=4 KERNEL_PER_TG=256 CONV1D
+
+#pragma kernel Conv3D_1x1_T16x16_R4x4 SUFFIX=Conv3D_1x1_T16x16_R BLOCK_SIZE=4 KERNEL_PER_TG=256 CONV3D K1x1
+#pragma kernel Conv2D_1x1_T16x16_R4x4 SUFFIX=Conv2D_1x1_T16x16_R BLOCK_SIZE=4 KERNEL_PER_TG=256 CONV2D K1x1
+#pragma kernel Conv1D_1x1_T16x16_R4x4 SUFFIX=Conv1D_1x1_T16x16_R BLOCK_SIZE=4 KERNEL_PER_TG=256 CONV1D K1x1
+
+#pragma kernel Conv3D_T8x8_R4x4 SUFFIX=Conv3D_T8x8_R BLOCK_SIZE=4 KERNEL_PER_TG=256 CONV3D
+#pragma kernel Conv2D_T8x8_R4x4 SUFFIX=Conv2D_T8x8_R BLOCK_SIZE=4 KERNEL_PER_TG=256 CONV2D
+#pragma kernel Conv1D_T8x8_R4x4 SUFFIX=Conv1D_T8x8_R BLOCK_SIZE=4 KERNEL_PER_TG=256 CONV1D
+
+#pragma multi_compile _ USEBIAS
+
+// TODO see if we need a fast path when shapes modulo match threadcount
+// TODO no LDS path for specific architectures
+// TODO coalesced writes were needed
+
+#define FUNC_NAME_CALL(KERNEL, SIZE) KERNEL##SIZE##x##SIZE
+#define FUNC_NAME(KERNEL, SIZE) FUNC_NAME_CALL(KERNEL, SIZE)
+#define CACHE_NAME_CALL(KERNEL, SIZE, TENSOR) KERNEL##SIZE##x##SIZE##_Cache_##TENSOR
+#define CACHE_NAME(KERNEL, SIZE, TENSOR) CACHE_NAME_CALL(KERNEL, SIZE, TENSOR)
+
+StructuredBuffer<float> Xptr;
+StructuredBuffer<float> Kptr;
+StructuredBuffer<float> Bptr;
+RWStructuredBuffer<float> Optr;
+
+uint O_batch, O_channels, O_depth, O_height, O_width;
+uint X_channels, X_depth, X_height, X_width;
+uint K_depth, K_height, K_width;
+
+uint4 _Pad;
+uint4 _Stride;
+uint4 _Dilation;
+float _MinValue;
+
+float ApplyFusedActivation(float v)
+{
+    return max(v, _MinValue);
+}
+
+#define KERNEL_NAME SUFFIX
+
+#if BLOCK_SIZE == 4
+
+#if KERNEL_PER_TG == 256
+#define CACHE_DEPTH 16 // This kernel code supports only CACHE_DEPTH=16, this value can not be changed
+groupshared float CACHE_NAME(KERNEL_NAME, BLOCK_SIZE, LDS)[CACHE_DEPTH * 16 * BLOCK_SIZE + CACHE_DEPTH * 64];
+
+[numthreads(16, 16, 1)]
+void FUNC_NAME(KERNEL_NAME, BLOCK_SIZE)(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV_GroupThreadID, uint threadIndex : SV_GroupIndex, uint3 groupID : SV_GroupID)
+{
+    // [W*H, Ky*Kx*In] * [Ky*Kx*In, Out] => [W*H, Out]
+#define LDS_ CACHE_NAME(KERNEL_NAME, BLOCK_SIZE, LDS)
+#define X_OFFSET 0
+#define W_OFFSET CACHE_DEPTH*64
+
+
+    uint x = dispatchThreadID.x * BLOCK_SIZE; // output_channels
+    uint y = dispatchThreadID.y * BLOCK_SIZE; // batch*depth*width*height
+    uint tx = groupThreadID.x;
+    uint ty = groupThreadID.y;
+    uint bx = (16 * groupID.x) * BLOCK_SIZE;
+    uint by = (16 * groupID.y) * BLOCK_SIZE;
+    uint ti = threadIndex;
+
+    #if defined(CONV3D)
+    uint d = O_depth;
+    uint h = O_height;
+    uint w = O_width;
+    uint channels = X_channels;
+    uint features = O_channels;
+    uint depthX = X_depth;
+    uint heightX = X_height;
+    uint widthX = X_width;
+    uint strideX = depthX * heightX * widthX;
+    uint strideO = d * h * w;
+    uint strideK = K_depth * K_height * K_width;
+    #elif defined(CONV2D)
+    uint h = O_height;
+    uint w = O_width;
+    uint channels = X_channels;
+    uint features = O_channels;
+    uint heightX = X_height;
+    uint widthX = X_width;
+    uint strideX = heightX * widthX;
+    uint strideO = h * w;
+    uint strideK = K_height * K_width;
+    #elif defined(CONV1D)
+    uint w = O_width;
+    uint channels = X_channels;
+    uint features = O_channels;
+    uint widthX = X_width;
+    uint strideX = widthX;
+    uint strideO = w;
+    uint strideK = K_width;
+    #endif
+
+    uint batchReadOffset = dispatchThreadID.z * channels * strideX;
+    uint batchWriteOffset = dispatchThreadID.z * features * strideO;
+
+    uint kernelBaseId = (groupID.x << 6);
+    uint outputPixelBaseId = (groupID.y << 6);
+
+    uint readK = ((bx | (ti & 63)) * channels + (ti >> 6)) * strideK;
+    bool maskK = (bx + (ti & 63)) < features;
+
+    float4 dstA0;
+    float4 dstA1;
+    float4 dstA2;
+    float4 dstA3;
+
+    #if defined(SHADER_API_MOBILE)
+    uint maxXIndex = O_batch * channels * strideX - 1;
+    uint maxBIndex = features - 1;
+    uint maxKIndex = strideK * features * channels - 1;
+    #endif
+
+    #ifdef USEBIAS
+    #if defined(SHADER_API_MOBILE)
+    dstA0.x = Bptr[min(x + 0, maxBIndex)];
+    dstA0.y = Bptr[min(x + 1, maxBIndex)];
+    dstA0.z = Bptr[min(x + 2, maxBIndex)];
+    dstA0.w = Bptr[min(x + 3, maxBIndex)];
+    #else
+    dstA0.x = x + 0 < features ? Bptr[x + 0] : 0.0f;
+    dstA0.y = x + 1 < features ? Bptr[x + 1] : 0.0f;
+    dstA0.z = x + 2 < features ? Bptr[x + 2] : 0.0f;
+    dstA0.w = x + 3 < features ? Bptr[x + 3] : 0.0f;
+    #endif
+    #else
+    dstA0 = 0;
+    #endif
+    dstA1 = dstA0;
+    dstA2 = dstA0;
+    dstA3 = dstA0;
+
+    uint centroidId = by | (ti & 63);
+
+    #if defined(CONV3D)
+    uint topD = (((centroidId / w) / h) % d) * _Stride.x;
+    uint topY = ((centroidId / w) % h) * _Stride.y;
+    uint topX = (centroidId % w) * _Stride.z;
+
+    uint cornerId = (topD - _Pad.x) * heightX * widthX + (topY - _Pad.y) * widthX + (topX - _Pad.z);
+    #elif defined(CONV2D)
+    uint topY = ((centroidId / w) % h) * _Stride.x;
+    uint topX = (centroidId % w) * _Stride.y;
+
+    uint cornerId = (topY - _Pad.x) * widthX + (topX - _Pad.y);
+    #elif defined(CONV1D)
+    uint topX = (centroidId % w) * _Stride.x;
+
+    uint cornerId = (topX - _Pad.x);
+    #endif
+    uint readX = strideX * (ti >> 6) + cornerId + batchReadOffset;
+
+
+    uint weightOffsetK = 0;
+    #if !defined(K1x1)
+    #if defined(CONV3D)
+    for (uint dd = 0; dd < K_depth; dd++)
+    for (uint dy = 0; dy < K_height; dy++)
+    for (uint dx = 0; dx < K_width; dx++)
+    #elif defined(CONV2D)
+    for (uint dy = 0; dy < K_height; dy++)
+    for (uint dx = 0; dx < K_width; dx++)
+    #elif defined(CONV1D)
+    for (uint dx = 0; dx < K_width; dx++)
+    #endif
+    #endif
+    {
+        #if defined(K1x1)
+        uint kernelOffsetX = 0;
+        #ifdef CONV3D
+        bool maskX = (topD - _Pad.x) < depthX &&
+                     (topY - _Pad.y) < heightX &&
+                     (topX - _Pad.z) < widthX;
+        #elif defined(CONV2D)
+        bool maskX = (topY - _Pad.x) < heightX &&
+                     (topX - _Pad.y) < widthX;
+        #elif defined(CONV1D)
+        bool maskX = (topX - _Pad.x) < widthX;
+        #endif
+        #else
+        #ifdef CONV3D
+        uint kernelOffsetX = _Dilation.x * dd * heightX * widthX + _Dilation.y * dy * widthX + _Dilation.z * dx;
+        bool maskX = (topD + _Dilation.x * dd - _Pad.x) < depthX &&
+                     (topY + _Dilation.y * dy - _Pad.y) < heightX &&
+                     (topX + _Dilation.z * dx - _Pad.z) < widthX;
+        #elif defined(CONV2D)
+        uint kernelOffsetX = _Dilation.x * dy * widthX + _Dilation.y * dx;
+        bool maskX = (topY + _Dilation.x * dy - _Pad.x) < heightX &&
+                     (topX + _Dilation.y * dx - _Pad.y) < widthX;
+        #elif defined(CONV1D)
+        uint kernelOffsetX = _Dilation.x * dx;
+        bool maskX = (topX + _Dilation.x * dx - _Pad.x) < widthX;
+        #endif
+        #endif
+
+        for (uint i = 0; i < channels; i += CACHE_DEPTH)
+        {
+            bool4 maskChannels = (ti >> 6) + (i + uint4(0, 1, 2, 3) * 4) < channels;
+
+            #if defined(SHADER_API_MOBILE)
+            LDS_[W_OFFSET + (0 << 8) + (ti & 0x1C0) + ((ti & 3) << 4) | ((ti & 63) >> 2)] = maskK && maskChannels.x ? Kptr[min(readK + strideK * (i + 0 * 4) + weightOffsetK, maxKIndex)] : 0.0f;
+            LDS_[W_OFFSET + (1 << 8) + (ti & 0x1C0) + ((ti & 3) << 4) | ((ti & 63) >> 2)] = maskK && maskChannels.y ? Kptr[min(readK + strideK * (i + 1 * 4) + weightOffsetK, maxKIndex)] : 0.0f;
+            LDS_[W_OFFSET + (2 << 8) + (ti & 0x1C0) + ((ti & 3) << 4) | ((ti & 63) >> 2)] = maskK && maskChannels.z ? Kptr[min(readK + strideK * (i + 2 * 4) + weightOffsetK, maxKIndex)] : 0.0f;
+            LDS_[W_OFFSET + (3 << 8) + (ti & 0x1C0) + ((ti & 3) << 4) | ((ti & 63) >> 2)] = maskK && maskChannels.w ? Kptr[min(readK + strideK * (i + 3 * 4) + weightOffsetK, maxKIndex)] : 0.0f;
+            #else
+            LDS_[W_OFFSET + (0 << 8) + (ti & 0x1C0) + ((ti & 3) << 4) | ((ti & 63) >> 2)] = maskK && maskChannels.x ? Kptr[readK + strideK * (i + 0 * 4) + weightOffsetK] : 0.0f;
+            LDS_[W_OFFSET + (1 << 8) + (ti & 0x1C0) + ((ti & 3) << 4) | ((ti & 63) >> 2)] = maskK && maskChannels.y ? Kptr[readK + strideK * (i + 1 * 4) + weightOffsetK] : 0.0f;
+            LDS_[W_OFFSET + (2 << 8) + (ti & 0x1C0) + ((ti & 3) << 4) | ((ti & 63) >> 2)] = maskK && maskChannels.z ? Kptr[readK + strideK * (i + 2 * 4) + weightOffsetK] : 0.0f;
+            LDS_[W_OFFSET + (3 << 8) + (ti & 0x1C0) + ((ti & 3) << 4) | ((ti & 63) >> 2)] = maskK && maskChannels.w ? Kptr[readK + strideK * (i + 3 * 4) + weightOffsetK] : 0.0f;
+            #endif
+
+            #if defined(SHADER_API_MOBILE)
+            LDS_[X_OFFSET + (ti | 256 * 0)] = maskX && maskChannels.x ? Xptr[min(readX + strideX * (i + 0 * 4) + kernelOffsetX, maxXIndex)] : 0.0f;
+            LDS_[X_OFFSET + (ti | 256 * 1)] = maskX && maskChannels.y ? Xptr[min(readX + strideX * (i + 1 * 4) + kernelOffsetX, maxXIndex)] : 0.0f;
+            LDS_[X_OFFSET + (ti | 256 * 2)] = maskX && maskChannels.z ? Xptr[min(readX + strideX * (i + 2 * 4) + kernelOffsetX, maxXIndex)] : 0.0f;
+            LDS_[X_OFFSET + (ti | 256 * 3)] = maskX && maskChannels.w ? Xptr[min(readX + strideX * (i + 3 * 4) + kernelOffsetX, maxXIndex)] : 0.0f;
+            #else
+            LDS_[X_OFFSET + (ti | 256 * 0)] = maskX && maskChannels.x ? Xptr[readX + strideX * (i + 0 * 4) + kernelOffsetX] : 0.0f;
+            LDS_[X_OFFSET + (ti | 256 * 1)] = maskX && maskChannels.y ? Xptr[readX + strideX * (i + 1 * 4) + kernelOffsetX] : 0.0f;
+            LDS_[X_OFFSET + (ti | 256 * 2)] = maskX && maskChannels.z ? Xptr[readX + strideX * (i + 2 * 4) + kernelOffsetX] : 0.0f;
+            LDS_[X_OFFSET + (ti | 256 * 3)] = maskX && maskChannels.w ? Xptr[readX + strideX * (i + 3 * 4) + kernelOffsetX] : 0.0f;
+            #endif
+            GroupMemoryBarrierWithGroupSync();
+
+            for (uint di = 0; di < CACHE_DEPTH; di++)
+            {
+                // [0..15]*64 + [0..3]*16 + [0..15]
+                float4 srcW = float4(
+                    LDS_[W_OFFSET + ((di << 6) | (0 * 16 | tx))],
+                    LDS_[W_OFFSET + ((di << 6) | (1 * 16 | tx))],
+                    LDS_[W_OFFSET + ((di << 6) | (2 * 16 | tx))],
+                    LDS_[W_OFFSET + ((di << 6) | (3 * 16 | tx))]
+                    );
+
+                // [0..15]*64 + [0..15]*4 + [0..3]
+                float4 srcX = float4(
+                    LDS_[X_OFFSET + ((di << 6) | ((ty << 2) | 0))],
+                    LDS_[X_OFFSET + ((di << 6) | ((ty << 2) | 1))],
+                    LDS_[X_OFFSET + ((di << 6) | ((ty << 2) | 2))],
+                    LDS_[X_OFFSET + ((di << 6) | ((ty << 2) | 3))]);
+
+
+                dstA0 += srcX.x * srcW;
+                dstA1 += srcX.y * srcW;
+                dstA2 += srcX.z * srcW;
+                dstA3 += srcX.w * srcW;
+            }
+
+            GroupMemoryBarrierWithGroupSync();
+        }
+
+        weightOffsetK++;
+    }
+
+    if (((y + 0) < strideO) && ((x + 0) < features))
+        Optr[(y + 0) + (x + 0)*strideO + batchWriteOffset] = ApplyFusedActivation(dstA0.x);
+    if (((y + 0) < strideO) && ((x + 1) < features))
+        Optr[(y + 0) + (x + 1)*strideO + batchWriteOffset] = ApplyFusedActivation(dstA0.y);
+    if (((y + 0) < strideO) && ((x + 2) < features))
+        Optr[(y + 0) + (x + 2)*strideO + batchWriteOffset] = ApplyFusedActivation(dstA0.z);
+    if (((y + 0) < strideO) && ((x + 3) < features))
+        Optr[(y + 0) + (x + 3)*strideO + batchWriteOffset] = ApplyFusedActivation(dstA0.w);
+
+    if (((y + 1) < strideO) && ((x + 0) < features))
+        Optr[(y + 1) + (x + 0)*strideO + batchWriteOffset] = ApplyFusedActivation(dstA1.x);
+    if (((y + 1) < strideO) && ((x + 1) < features))
+        Optr[(y + 1) + (x + 1)*strideO + batchWriteOffset] = ApplyFusedActivation(dstA1.y);
+    if (((y + 1) < strideO) && ((x + 2) < features))
+        Optr[(y + 1) + (x + 2)*strideO + batchWriteOffset] = ApplyFusedActivation(dstA1.z);
+    if (((y + 1) < strideO) && ((x + 3) < features))
+        Optr[(y + 1) + (x + 3)*strideO + batchWriteOffset] = ApplyFusedActivation(dstA1.w);
+
+    if (((y + 2) < strideO) && ((x + 0) < features))
+        Optr[(y + 2) + (x + 0)*strideO + batchWriteOffset] = ApplyFusedActivation(dstA2.x);
+    if (((y + 2) < strideO) && ((x + 1) < features))
+        Optr[(y + 2) + (x + 1)*strideO + batchWriteOffset] = ApplyFusedActivation(dstA2.y);
+    if (((y + 2) < strideO) && ((x + 2) < features))
+        Optr[(y + 2) + (x + 2)*strideO + batchWriteOffset] = ApplyFusedActivation(dstA2.z);
+    if (((y + 2) < strideO) && ((x + 3) < features))
+        Optr[(y + 2) + (x + 3)*strideO + batchWriteOffset] = ApplyFusedActivation(dstA2.w);
+
+    if (((y + 3) < strideO) && ((x + 0) < features))
+        Optr[(y + 3) + (x + 0)*strideO + batchWriteOffset] = ApplyFusedActivation(dstA3.x);
+    if (((y + 3) < strideO) && ((x + 1) < features))
+        Optr[(y + 3) + (x + 1)*strideO + batchWriteOffset] = ApplyFusedActivation(dstA3.y);
+    if (((y + 3) < strideO) && ((x + 2) < features))
+        Optr[(y + 3) + (x + 2)*strideO + batchWriteOffset] = ApplyFusedActivation(dstA3.z);
+    if (((y + 3) < strideO) && ((x + 3) < features))
+        Optr[(y + 3) + (x + 3)*strideO + batchWriteOffset] = ApplyFusedActivation(dstA3.w);
+
+#undef X_
+#undef W_
+#undef LDS_
+#undef X_OFFSET
+#undef W_OFFSET
+}
+#undef CACHE_DEPTH
+#undef BUF_OFFSET
+#elif KERNEL_PER_TG == 64
+#define CACHE_DEPTH 8
+groupshared float CACHE_NAME(KERNEL_NAME, BLOCK_SIZE, LDS)[2 * CACHE_DEPTH * 8 * BLOCK_SIZE];
+[numthreads(8, 8, 1)]
+void FUNC_NAME(KERNEL_NAME, BLOCK_SIZE)(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV_GroupThreadID, uint threadIndex : SV_GroupIndex, uint3 groupID : SV_GroupID)
+{
+    // [W*H, Ky*Kx*In] * [Ky*Kx*In, Out] => [W*H, Out]
+#define LDS_ CACHE_NAME(KERNEL_NAME, BLOCK_SIZE, LDS)
+#define X_OFFSET 0
+#define W_OFFSET CACHE_DEPTH*32
+
+    uint x = dispatchThreadID.x * BLOCK_SIZE; // output_channels
+    uint y = dispatchThreadID.y * BLOCK_SIZE; // batch*width*height (width*height in HWC)
+    uint tx = groupThreadID.x;
+    uint ty = groupThreadID.y;
+    uint bx = (8 * groupID.x) * BLOCK_SIZE;
+    uint by = (8 * groupID.y) * BLOCK_SIZE;
+    uint ti = threadIndex;
+    #if defined(CONV3D)
+    uint d = O_depth;
+    uint h = O_height;
+    uint w = O_width;
+    uint channels = X_channels;
+    uint depthX = X_depth;
+    uint heightX = X_height;
+    uint widthX = X_width;
+    uint strideX = depthX * heightX * widthX;
+    uint strideO = d * h * w;
+    uint strideK = K_depth * K_height * K_width;
+    #elif defined(CONV2D)
+    uint h = O_height;
+    uint w = O_width;
+    uint channels = X_channels;
+    uint heightX = X_height;
+    uint widthX = X_width;
+    uint strideX = heightX * widthX;
+    uint strideO = h * w;
+    uint strideK = K_height * K_width;
+    #else
+    uint w = O_width;
+    uint channels = X_channels;
+    uint widthX = X_width;
+    uint strideX = widthX;
+    uint strideO = w;
+    uint strideK = K_width;
+    #endif
+
+    uint batchReadOffset = dispatchThreadID.z * channels * strideX;
+    uint batchWriteOffset = dispatchThreadID.z * O_channels * strideO;
+
+    uint kernelBaseId = (groupID.x << 5);
+    uint outputPixelBaseId = (groupID.y << 5);
+
+    uint readK = ((bx | (ti & 31)) * channels + (ti >> 5)) * strideK;
+    bool maskK = (bx + (ti & 31)) < O_channels;
+
+    float4 dstA0;
+    float4 dstA1;
+    float4 dstA2;
+    float4 dstA3;
+
+    uint maxBiasIndex = O_channels - 1;
+    #ifdef USEBIAS
+    dstA0.x = Bptr[min(maxBiasIndex, x + 0)];
+    dstA0.y = Bptr[min(maxBiasIndex, x + 1)];
+    dstA0.z = Bptr[min(maxBiasIndex, x + 2)];
+    dstA0.w = Bptr[min(maxBiasIndex, x + 3)];
+    #else
+    dstA0 = 0;
+    #endif
+    dstA1 = dstA0;
+    dstA2 = dstA0;
+    dstA3 = dstA0;
+
+    uint centroidId = by | (ti & 31);
+
+    #if defined(CONV3D)
+    uint topD = (((centroidId / w) / h) % d) * _Stride.x - _Pad.x;
+    uint topY = ((centroidId / w) % h) * _Stride.y - _Pad.y;
+    uint topX = (centroidId % w) * _Stride.z - _Pad.z;
+
+    uint cornerId = topD * heightX * widthX + topY * widthX + topX;
+    #elif defined(CONV2D)
+    uint topY = ((centroidId / w) % h) * _Stride.x - _Pad.x;
+    uint topX = (centroidId % w) * _Stride.y - _Pad.y;
+
+    uint cornerId = topY * widthX + topX;
+    #else
+    uint topX = (centroidId % w) * _Stride.x - _Pad.x;
+
+    uint cornerId = topX;
+    #endif
+    uint readX = strideX * (ti >> 5) + cornerId + batchReadOffset;
+
+    uint weightOffsetK = 0;
+    #if defined(CONV3D)
+    for (uint dd = 0; dd < K_depth; dd++)
+    for (uint dy = 0; dy < K_height; dy++)
+    for (uint dx = 0; dx < K_width; dx++)
+    #elif defined(CONV2D)
+    for (uint dy = 0; dy < K_height; dy++)
+    for (uint dx = 0; dx < K_width; dx++)
+    #else
+    for (uint dx = 0; dx < K_width; dx++)
+    #endif
+    {
+        #ifdef CONV3D
+        uint kernelOffsetX = (_Dilation.x * dd * heightX * widthX + _Dilation.y * dy * widthX + _Dilation.z * dx);
+        bool maskX = (topD + _Dilation.x * dd) < depthX &&
+                     (topY + _Dilation.y * dy) < heightX &&
+                     (topX + _Dilation.z * dx) < widthX;
+        #elif defined(CONV2D)
+        uint kernelOffsetX = (_Dilation.x * dy * widthX + _Dilation.y * dx);
+        bool maskX = (topY + _Dilation.x * dy) < heightX &&
+                     (topX + _Dilation.y * dx) < widthX;
+        #elif defined(CONV1D)
+        uint kernelOffsetX = (_Dilation.x * dx);
+        bool maskX = (topX + _Dilation.x * dx) < widthX;
+        #endif
+
+        for (uint i = 0; i < channels; i += CACHE_DEPTH)
+        {
+            bool4 maskChannels = (ti >> 5) + (i + uint4(0, 1, 2, 3) * 4) < channels;
+
+            LDS_[(0 * 64 + W_OFFSET) | (8 * (ti & 3) + (ti & 0x20)) | ((ti & 31) >> 2)] = maskK & maskChannelsK.x ? Kptr[readK];
+            readK += strideK * (channels <= (i + 0 * 2) ? 0 : min(channels - (i + 0 * 2), 2));
+            LDS_[(1 * 64 + W_OFFSET) | (8 * (ti & 3) + (ti & 0x20)) | ((ti & 31) >> 2)] = maskK & maskChannelsK.y ? Kptr[readK];
+            readK += strideK * (channels <= (i + 1 * 2) ? 0 : min(channels - (i + 1 * 2), 2));
+            LDS_[(2 * 64 + W_OFFSET) | (8 * (ti & 3) + (ti & 0x20)) | ((ti & 31) >> 2)] = maskK & maskChannelsK.z ? Kptr[readK];
+            readK += strideK * (channels <= (i + 2 * 2) ? 0 : min(channels - (i + 2 * 2), 2));
+            LDS_[(3 * 64 + W_OFFSET) | (8 * (ti & 3) + (ti & 0x20)) | ((ti & 31) >> 2)] = maskK & maskChannelsK.w ? Kptr[readK];
+            readK += strideK * (channels <= (i + 3 * 2) ? 0 : min(channels - (i + 3 * 2), 2));
+
+
+            LDS_[X_OFFSET + ti + 64 * 0] = mask && maskChannelsX.x ? Xptr[readX + depthX * heightX * widthX * (i + 0 * 2) + kernelOffsetX] ? 0.0f;
+            LDS_[X_OFFSET + ti + 64 * 1] = mask && maskChannelsX.y ? Xptr[readX + depthX * heightX * widthX * (i + 1 * 2) + kernelOffsetX] ? 0.0f;
+            LDS_[X_OFFSET + ti + 64 * 2] = mask && maskChannelsX.z ? Xptr[readX + depthX * heightX * widthX * (i + 2 * 2) + kernelOffsetX] ? 0.0f;
+            LDS_[X_OFFSET + ti + 64 * 3] = mask && maskChannelsX.w ? Xptr[readX + depthX * heightX * widthX * (i + 3 * 2) + kernelOffsetX] ? 0.0f;
+
+
+            GroupMemoryBarrierWithGroupSync();
+
+            for (uint di = 0; di < CACHE_DEPTH; di++)
+            {
+                float4 srcX = float4(
+                    LDS_[X_OFFSET + (di << 5) | ((ty << 2) | 0)],
+                    LDS_[X_OFFSET + (di << 5) | ((ty << 2) | 1)],
+                    LDS_[X_OFFSET + (di << 5) | ((ty << 2) | 2)],
+                    LDS_[X_OFFSET + (di << 5) | ((ty << 2) | 3)]);
+                float4 srcW = float4(
+                    LDS_[W_OFFSET + (di << 5) | (0 * 8 | tx)],
+                    LDS_[W_OFFSET + (di << 5) | (1 * 8 | tx)],
+                    LDS_[W_OFFSET + (di << 5) | (2 * 8 | tx)],
+                    LDS_[W_OFFSET + (di << 5) | (3 * 8 | tx)]);
+
+                dstA0 += srcX.x * srcW;
+                dstA1 += srcX.y * srcW;
+                dstA2 += srcX.z * srcW;
+                dstA3 += srcX.w * srcW;
+            }
+
+            GroupMemoryBarrierWithGroupSync();
+        }
+
+        weightOffsetK++;
+    }
+
+    if (((y + 0) < strideO) && ((x + 0) < O_channels))
+        Optr[(y + 0) + (x + 0)*strideO + batchWriteOffset] = ApplyFusedActivation(dstA0.x);
+    if (((y + 0) < strideO) && ((x + 1) < O_channels))
+        Optr[(y + 0) + (x + 1)*strideO + batchWriteOffset] = ApplyFusedActivation(dstA0.y);
+    if (((y + 0) < strideO) && ((x + 2) < O_channels))
+        Optr[(y + 0) + (x + 2)*strideO + batchWriteOffset] = ApplyFusedActivation(dstA0.z);
+    if (((y + 0) < strideO) && ((x + 3) < O_channels))
+        Optr[(y + 0) + (x + 3)*strideO + batchWriteOffset] = ApplyFusedActivation(dstA0.w);
+
+    if (((y + 1) < strideO) && ((x + 0) < O_channels))
+        Optr[(y + 1) + (x + 0)*strideO + batchWriteOffset] = ApplyFusedActivation(dstA1.x);
+    if (((y + 1) < strideO) && ((x + 1) < O_channels))
+        Optr[(y + 1) + (x + 1)*strideO + batchWriteOffset] = ApplyFusedActivation(dstA1.y);
+    if (((y + 1) < strideO) && ((x + 2) < O_channels))
+        Optr[(y + 1) + (x + 2)*strideO + batchWriteOffset] = ApplyFusedActivation(dstA1.z);
+    if (((y + 1) < strideO) && ((x + 3) < O_channels))
+        Optr[(y + 1) + (x + 3)*strideO + batchWriteOffset] = ApplyFusedActivation(dstA1.w);
+
+    if (((y + 2) < strideO) && ((x + 0) < O_channels))
+        Optr[(y + 2) + (x + 0)*strideO + batchWriteOffset] = ApplyFusedActivation(dstA2.x);
+    if (((y + 2) < strideO) && ((x + 1) < O_channels))
+        Optr[(y + 2) + (x + 1)*strideO + batchWriteOffset] = ApplyFusedActivation(dstA2.y);
+    if (((y + 2) < strideO) && ((x + 2) < O_channels))
+        Optr[(y + 2) + (x + 2)*strideO + batchWriteOffset] = ApplyFusedActivation(dstA2.z);
+    if (((y + 2) < strideO) && ((x + 3) < O_channels))
+        Optr[(y + 2) + (x + 3)*strideO + batchWriteOffset] = ApplyFusedActivation(dstA2.w);
+
+    if (((y + 3) < strideO) && ((x + 0) < O_channels))
+        Optr[(y + 3) + (x + 0)*strideO + batchWriteOffset] = ApplyFusedActivation(dstA3.x);
+    if (((y + 3) < strideO) && ((x + 1) < O_channels))
+        Optr[(y + 3) + (x + 1)*strideO + batchWriteOffset] = ApplyFusedActivation(dstA3.y);
+    if (((y + 3) < strideO) && ((x + 2) < O_channels))
+        Optr[(y + 3) + (x + 2)*strideO + batchWriteOffset] = ApplyFusedActivation(dstA3.z);
+    if (((y + 3) < strideO) && ((x + 3) < O_channels))
+        Optr[(y + 3) + (x + 3)*strideO + batchWriteOffset] = ApplyFusedActivation(dstA3.w);
+
+#undef X_
+#undef W_
+#undef LDS_
+#undef X_OFFSET
+#undef W_OFFSET
+}
+#endif
+#endif
+#undef KERNEL_NAME
