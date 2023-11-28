@@ -16,3 +16,5 @@
 **/build/*
 */.vsconfig
 */Logs/*
+*/*DS_Store
+*DS_Store
