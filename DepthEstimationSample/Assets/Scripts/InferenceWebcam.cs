@@ -52,7 +52,8 @@ public class InferenceWebcam : MonoBehaviour
         }
 
         bool hasMoreWork = false;
-        for (int i = 0; i < modelLayerCount / framesToExectute; i++)
+        int layersPerFrame = modelLayerCount / framesToExectute + 1;
+        for (int i = 0; i < layersPerFrame ; i++)
         {
             hasMoreWork = executionSchedule.MoveNext();
             if (!hasMoreWork)
