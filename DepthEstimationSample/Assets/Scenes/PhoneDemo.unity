@@ -222,5 +222,6 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   estimationModel: {fileID: 5022602860645237092, guid: e3fa3826568c4d24c9b81fa7fad091d2, type: 3}
   material: {fileID: 2100000, guid: a80d8cf5d67d3f44c84343fc3f7de2dd, type: 2}
+  materialmacOS: {fileID: 2100000, guid: 53716757d00a44df6a72c2aae907e7c2, type: 2}
   colorMap: {fileID: 2800000, guid: a62f7ea0c1084134e83afe96fd30ee19, type: 3}
   framesToExectute: 4
