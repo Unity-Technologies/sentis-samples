@@ -19,12 +19,6 @@ public class InferenceWebcam : MonoBehaviour
     
     void Start()
     {
-        #if UNITY_STANDALONE_OSX || UNITY_EDITOR_OSX
-        material.EnableKeyword("MACOS");
-        #else
-        material.DisableKeyword("MACOS");
-        #endif
-        
         Application.targetFrameRate = 60;
         var model = ModelLoader.Load(estimationModel);
         var output = model.outputs[0];
