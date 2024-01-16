@@ -11,6 +11,7 @@ Shader "Unlit/RainbowScan"
         Pass
         {
             CGPROGRAM
+            #pragma multi_compile _ MACOS
             #pragma vertex vert
             #pragma fragment frag
 
@@ -38,8 +39,13 @@ Shader "Unlit/RainbowScan"
 
             float4 frag(v2f i, UNITY_VPOS_TYPE screenPos : VPOS) : SV_Target
             {
+                #ifdef MACOS
+                float4 rgba = WebCamTex.SampleLevel(LinearClampSampler, float2((screenPos.x / ScreenCamResolution.y), 1 - (screenPos.y / ScreenCamResolution.x)), 0);
+                float depth = DepthTex.SampleLevel(LinearClampSampler, float2((screenPos.x / ScreenCamResolution.y), (screenPos.y / ScreenCamResolution.x)), 0);
+                #else
                 float4 rgba = WebCamTex.SampleLevel(LinearClampSampler, float2((screenPos.y / ScreenCamResolution.x), (screenPos.x / ScreenCamResolution.y)), 0);
                 float depth = DepthTex.SampleLevel(LinearClampSampler, float2((screenPos.y / ScreenCamResolution.x), 1 - (screenPos.x / ScreenCamResolution.y)), 0);
+                #endif
 
                 float t = (sin(20*_Time)+0.5);
                 depth = clamp(depth*1024, 0, 1023);

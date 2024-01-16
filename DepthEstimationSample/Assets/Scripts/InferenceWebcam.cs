@@ -12,7 +12,6 @@ public class InferenceWebcam : MonoBehaviour
     RenderTexture outputTexture;
 
     public Material material;
-    public Material materialmacOS;
     public Texture2D colorMap;
 
     int modelLayerCount = 0;
@@ -21,7 +20,9 @@ public class InferenceWebcam : MonoBehaviour
     void Start()
     {
         #if UNITY_STANDALONE_OSX || UNITY_EDITOR_OSX
-            material = materialmacOS;
+        material.EnableKeyword("MACOS");
+        #else
+        material.DisableKeyword("MACOS");
         #endif
         
         Application.targetFrameRate = 60;
