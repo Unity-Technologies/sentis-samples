@@ -9,3 +9,4 @@ Contains example and template projects for Sentis package use.
 
 [Depth Estimation](DepthEstimationSample/README.md)
 
+Protein Folding](ProteinFoldingSample/README.md)

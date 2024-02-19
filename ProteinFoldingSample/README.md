@@ -1,4 +1,8 @@
 # Protein Folding Sample
+
+Protein folding visualization demo showing how to render and visualize protein folding in real time 3D.
+
+![image info](./Documentation/main.png)
  
 This demo is a simplified recreation of Alphafold (version 1) which won the CASP (2018) protein folding competition. 
 It is based off this implementation: https://github.com/Urinx/alphafold_pytorch

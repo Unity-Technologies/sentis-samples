@@ -3,7 +3,7 @@
 Othello mini-game showing how to integrate a neural network into the gameplay loop to drive a boardgame opponent.
 
 
-![image info](./Documentation/main.gif)
+![image info](./Documentation/main.png)
 
 ## Gameplay Idea
 
