@@ -69,13 +69,13 @@ public class InferenceWebcam : MonoBehaviour
         executionStarted = false;
     }
 
-    void OnRenderImage(RenderTexture source, RenderTexture destination)
+    void OnRenderObject()
     {
         material.SetVector("ScreenCamResolution", new Vector4(Screen.height, Screen.width, 0, 0));
         material.SetTexture("WebCamTex", webcamTexture);
         material.SetTexture("DepthTex", outputTexture);
         material.SetTexture("ColorRampTex", colorMap);
-        Graphics.Blit(null, destination, material);
+        Graphics.Blit(null, material);
     }
 
     private void OnDestroy()
