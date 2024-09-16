@@ -1,0 +1,33 @@
+#pragma kernel ImageSample
+
+Texture2D X_tex2D;
+SamplerState LinearClampSampler;
+RWStructuredBuffer<float> Optr;
+
+uint O_width;
+uint O_height;
+uint O_channels;
+uint X_width;
+uint X_height;
+float4x4 affineMatrix;
+
+[numthreads(8, 8, 1)]
+void ImageSample(uint3 dispatchThreadID : SV_DispatchThreadID)
+{
+    uint2 O_pos = dispatchThreadID.yx;
+
+    if (O_pos.x >= O_width || O_pos.y >= O_height)
+        return;
+
+    float4 uv = mul(affineMatrix, float4(O_pos.x, O_pos.y, 1, 1)) / float4(X_width, X_height, 1, 1);
+
+    bool mask = uv.x >= 0 && uv.x <= 1 && uv.y >= 0 && uv.y <= 1;
+    float4 c = mask * X_tex2D.SampleLevel(LinearClampSampler, uv.xy, 0);
+    // SRGB conversion
+    bool3 maskRGB = c.rgb > 0.0031308f;
+    c.rgb = lerp(12.92f * c.rgb, 1.055f * (pow(abs(c.rgb), 0.41666666666f) - 0.055f), maskRGB);
+
+    Optr[(O_pos.y * O_width + O_pos.x) * O_channels + 0] = c.x;
+    Optr[(O_pos.y * O_width + O_pos.x) * O_channels + 1] = c.y;
+    Optr[(O_pos.y * O_width + O_pos.x) * O_channels + 2] = c.z;
+}
