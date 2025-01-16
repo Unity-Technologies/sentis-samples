@@ -3,10 +3,8 @@ using Unity.Sentis;
 
 public class Gravity : MonoBehaviour
 {
-    //public ModelAsset modelAsset;
-    IWorker worker;
-    GPUComputeBackend backend;
-    
+    Worker worker;
+
     public GameObject planet;
     GameObject[] planets = new GameObject[N];
     const int N = 3000;
@@ -14,14 +12,12 @@ public class Gravity : MonoBehaviour
     const float t = 0.001f; // TimeStep
     const float G = -9f; // gravity
 
-   TensorFloat x = TensorFloat.AllocZeros(new TensorShape(1, N, 3));  // positions
-   TensorFloat p = TensorFloat.AllocZeros(new TensorShape(N, 3)); // momentum (= mass * velocity)
-   TensorFloat m = TensorFloat.AllocZeros(new TensorShape(N)); // mass
+    Tensor<float> x = new (new TensorShape(1, N, 3)); // positions
+    Tensor<float> p = new (new TensorShape(N, 3)); // momentum (= mass * velocity)
+    Tensor<float> m = new (new TensorShape(N)); // mass
 
     void Start()
     {
-        backend = new GPUComputeBackend();
-
         float massMin = 0.0001f;
         float massMax = 100f;
 
@@ -50,49 +46,48 @@ public class Gravity : MonoBehaviour
             renderer.material.SetFloat("MassRatio", (mass - massMin)/(massMax - massMin));
         }
 
+        var graph = new FunctionalGraph();
+        var xdef = graph.AddInput<float>(x.shape);
+        var mdef = graph.AddInput<float>(m.shape);
+        var pdef = graph.AddInput<float>(p.shape);
 
-        var xdef = new InputDef(DataType.Float, x.shape);
-        var pdef = new InputDef(DataType.Float, p.shape);
-        var mdef = new InputDef(DataType.Float, m.shape);
+        // https://en.wikipedia.org/wiki/N-body_problem
+        // Hamilton equation of motion
+        // position q_i
+        // momentum p_i = m_i dq_i/dt
+        // dq_i/dt = dH/dp_i dp_i/dt = -dH/dq_i
+        // H = T + U = Sum_i(||p_i|| ^ 2 / 2m_i) - Sum_i,j(G * m_j * m_i / ||q_j - q_i||)
+        // write this in tensor form
 
-        var modelMotion = Functional.Compile((x, m, p) =>
-        {
-            // https://en.wikipedia.org/wiki/N-body_problem
-            // Hamilton equation of motion
-            // position q_i
-            // momentum p_i = m_i dq_i/dt
-            // dq_i/dt = dH/dp_i dp_i/dt = -dH/dq_i
-            // H = T + U = Sum_i(||p_i|| ^ 2 / 2m_i) - Sum_i,j(G * m_j * m_i / ||q_j - q_i||)
-            // write this in tensor form
+        var xT = Functional.Transpose(xdef, 0, 1);
 
-            var xT = Functional.Transpose(x, 0, 1);
-            // Use this as to avoid 0/0 when i=j
-            var epsilon = 0.000001f;
+        // Use this as to avoid 0/0 when i=j
+        var epsilon = 0.000001f;
 
-            // create array of distance vectors
-            var xy = x - xT;
+        // create array of distance vectors
+        var xy = xdef - xT;
 
-            // calculate r^2 distances
-            var R2 = Functional.ReduceSum(xy * xy, -1, false) + epsilon;
-            R2 = Functional.Unsqueeze(R2, 2);
+        // calculate r^2 distances
+        var R2 = Functional.ReduceSum(xy * xy, -1, false) + epsilon;
+        R2 = Functional.Unsqueeze(R2, 2);
 
-            // multiply by masses
-            var mu1 = Functional.Unsqueeze(m, 1);
-            var mu = Functional.Unsqueeze(mu1, 1);
-            var Mxy = mu * xy;
+        // multiply by masses
+        var mu1 = Functional.Unsqueeze(mdef, 1);
+        var mu = Functional.Unsqueeze(mu1, 1);
+        var Mxy = mu * xy;
 
-            var a = Functional.ReduceSum(Mxy / Functional.Pow(R2, 1.5f), 0);
+        var a = Functional.ReduceSum(Mxy / Functional.Pow(R2, 1.5f), 0);
 
-            var dp = mu1 * a;
+        var dp = mu1 * a;
 
-            // p_n+1 = p_n + G * t * dp
-            // x_n+1 = x_n + p_n / m) * t
-            return (p + (G * t * dp), x + (p / Functional.Unsqueeze(m, 1)) * t);
-        },
-          (xdef, mdef, pdef)
-        );
+        // p_n+1 = p_n + G * t * dp
+        // x_n+1 = x_n + (p_n / m) * t
+        var output1 = pdef + (G * t * dp);
+        var output2 = xdef + (pdef / Functional.Unsqueeze(mdef, 1)) * t;
 
-        worker = WorkerFactory.CreateWorker(BackendType.GPUCompute, modelMotion);
+        var modelMotion = graph.Compile(output1, output2);
+
+        worker = new Worker(modelMotion, BackendType.GPUCompute);
     }
 
     void Update()
@@ -100,13 +95,13 @@ public class Gravity : MonoBehaviour
         worker.SetInput("input_0", x);
         worker.SetInput("input_1", m);
         worker.SetInput("input_2", p);
-        worker.Execute();
+        worker.Schedule();
 
-        var p_n = worker.PeekOutput("output_0") as TensorFloat;
-        var x_n = worker.PeekOutput("output_1") as TensorFloat;
+        var p_n = worker.PeekOutput("output_0") as Tensor<float>;
+        var x_n = worker.PeekOutput("output_1") as Tensor<float>;
 
-        backend.MemCopy(p_n, p);
-        backend.MemCopy(x_n, x);
+        p = p_n.ReadbackAndClone();
+        x = x_n.ReadbackAndClone();
 
         for (int i = 0; i < N; i++)
         {
@@ -116,12 +111,11 @@ public class Gravity : MonoBehaviour
         }
     }
 
-    private void OnDestroy()
+    void OnDestroy()
     {
         x.Dispose();
         p.Dispose();
         m.Dispose();
-        backend.Dispose();
         worker.Dispose();
     }
 }

@@ -1,14 +1,13 @@
 using System.Collections;
-using System.Collections.Generic;
 using UnityEngine;
 using Unity.Sentis;
 
 public class InferenceWebcam : MonoBehaviour
 {
     public ModelAsset estimationModel;
-    IWorker m_engineEstimation;
+    Worker m_engineEstimation;
     WebCamTexture webcamTexture;
-    TensorFloat inputTensor;
+    Tensor<float> inputTensor;
     RenderTexture outputTexture;
 
     public Material material;
@@ -16,20 +15,28 @@ public class InferenceWebcam : MonoBehaviour
 
     int modelLayerCount = 0;
     public int framesToExectute = 2;
-    
+
     void Start()
     {
         Application.targetFrameRate = 60;
         var model = ModelLoader.Load(estimationModel);
-        var output = model.outputs[0];
-        model.layers.Add(new Unity.Sentis.Layers.ReduceMax("max0", new[] { output }, false));
-        model.layers.Add(new Unity.Sentis.Layers.ReduceMin("min0", new[] { output }, false));
-        model.layers.Add(new Unity.Sentis.Layers.Sub("maxO - minO", "max0", "min0"));
-        model.layers.Add(new Unity.Sentis.Layers.Sub("output - min0", output, "min0"));
-        model.layers.Add(new Unity.Sentis.Layers.Div("output2", "output - min0", "maxO - minO"));
+
+        // Post process
+        var graph = new FunctionalGraph();
+        var inputs = graph.AddInputs(model);
+        var outputs = Functional.Forward(model, inputs);
+        var output = outputs[0];
+
+        var max0 = Functional.ReduceMax(output, -1, false);
+        var min0 = Functional.ReduceMin(output, -1, false);
+        var subMax0Min0 = max0 - min0;
+        var subOutputMin0 = output - min0;
+        var output2 = subOutputMin0 / subMax0Min0;
+
+        model = graph.Compile(output2);
         modelLayerCount = model.layers.Count;
-        model.outputs = new List<string>() { "output2" };
-        m_engineEstimation = WorkerFactory.CreateWorker(BackendType.GPUCompute, model);
+
+        m_engineEstimation = new Worker(model, BackendType.GPUCompute);
 
         WebCamDevice[] devices = WebCamTexture.devices;
         webcamTexture = new WebCamTexture(1920, 1080);
@@ -37,17 +44,17 @@ public class InferenceWebcam : MonoBehaviour
         webcamTexture.Play();
 
         outputTexture = new RenderTexture(256, 256, 0, RenderTextureFormat.ARGBFloat);
-        inputTensor = TensorFloat.Zeros(new TensorShape(1, 3, 256, 256));
+        inputTensor = new Tensor<float>(new TensorShape(1, 3, 256, 256));
     }
 
     bool executionStarted = false;
     IEnumerator executionSchedule;
-    private void Update()
+    void Update()
     {
         if (!executionStarted)
         {
             TextureConverter.ToTensor(webcamTexture, inputTensor, new TextureTransform());
-            executionSchedule = m_engineEstimation.StartManualSchedule(inputTensor);
+            executionSchedule = m_engineEstimation.ScheduleIterable(inputTensor);
             executionStarted = true;
         }
 
@@ -63,9 +70,9 @@ public class InferenceWebcam : MonoBehaviour
         if (hasMoreWork)
             return;
 
-        var output = m_engineEstimation.PeekOutput() as TensorFloat;
-        output = output.ShallowReshape(output.shape.Unsqueeze(0)) as TensorFloat;
-        TextureConverter.RenderToTexture(output as TensorFloat, outputTexture, new TextureTransform().SetCoordOrigin(CoordOrigin.BottomLeft));
+        var output = m_engineEstimation.PeekOutput() as Tensor<float>;
+        output.Reshape(output.shape.Unsqueeze(0));
+        TextureConverter.RenderToTexture(output, outputTexture, new TextureTransform().SetCoordOrigin(CoordOrigin.BottomLeft));
         executionStarted = false;
     }
 
@@ -78,7 +85,7 @@ public class InferenceWebcam : MonoBehaviour
         Graphics.Blit(null, material);
     }
 
-    private void OnDestroy()
+    void OnDestroy()
     {
         m_engineEstimation.Dispose();
         inputTensor.Dispose();
