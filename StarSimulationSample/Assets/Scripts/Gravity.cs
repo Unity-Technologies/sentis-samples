@@ -12,14 +12,18 @@ public class Gravity : MonoBehaviour
     const float t = 0.001f; // TimeStep
     const float G = -9f; // gravity
 
-    Tensor<float> x = new (new TensorShape(1, N, 3)); // positions
-    Tensor<float> p = new (new TensorShape(N, 3)); // momentum (= mass * velocity)
-    Tensor<float> m = new (new TensorShape(N)); // mass
+    Tensor<float> x;
+    Tensor<float> p;
+    Tensor<float> m;
 
     void Start()
     {
         float massMin = 0.0001f;
         float massMax = 100f;
+        
+        x = new Tensor<float>(new TensorShape(1, N, 3)); // positions
+        p = new Tensor<float>(new TensorShape(N, 3)); // momentum (= mass * velocity)
+        m = new Tensor<float>(new TensorShape(N)); // mass
 
         // Randomize positions, momenta and masses
         for (int i = 0; i < N; i++)
@@ -92,30 +96,26 @@ public class Gravity : MonoBehaviour
 
     void Update()
     {
-        worker.SetInput("input_0", x);
-        worker.SetInput("input_1", m);
-        worker.SetInput("input_2", p);
-        worker.Schedule();
+        worker.Schedule(x, m, p);
 
-        var p_n = worker.PeekOutput("output_0") as Tensor<float>;
-        var x_n = worker.PeekOutput("output_1") as Tensor<float>;
-
-        p = p_n.ReadbackAndClone();
-        x = x_n.ReadbackAndClone();
+        p?.Dispose();
+        x?.Dispose();
+        p = (worker.PeekOutput("output_0") as Tensor<float>).ReadbackAndClone();
+        x = (worker.PeekOutput("output_1") as Tensor<float>).ReadbackAndClone();
 
         for (int i = 0; i < N; i++)
         {
             Renderer renderer = planets[i].GetComponent<Renderer>();
             renderer.material.SetBuffer("Positions", ComputeTensorData.Pin(x, clearOnInit: false).buffer);
-            renderer.material.SetInt("Index", i);
+            renderer.material.SetInteger("Index", i);
         }
     }
 
     void OnDestroy()
     {
-        x.Dispose();
-        p.Dispose();
-        m.Dispose();
-        worker.Dispose();
+        x?.Dispose();
+        p?.Dispose();
+        m?.Dispose();
+        worker?.Dispose();
     }
 }
