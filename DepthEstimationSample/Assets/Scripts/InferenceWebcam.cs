@@ -27,8 +27,8 @@ public class InferenceWebcam : MonoBehaviour
         var outputs = Functional.Forward(model, inputs);
         var output = outputs[0];
 
-        var max0 = Functional.ReduceMax(output, -1, false);
-        var min0 = Functional.ReduceMin(output, -1, false);
+        var max0 = Functional.ReduceMax(output, new[] { 1, 2 }, false);
+        var min0 = Functional.ReduceMin(output, new[] { 1, 2 }, false);
         var subMax0Min0 = max0 - min0;
         var subOutputMin0 = output - min0;
         var output2 = subOutputMin0 / subMax0Min0;
