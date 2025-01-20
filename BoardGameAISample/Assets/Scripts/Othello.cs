@@ -83,7 +83,7 @@ public class Othello : MonoBehaviour
         // Convert outputs to probabilities
         bestMove = Functional.Exp(bestMove * m_AIDifficultyTemperature);
         // Mask out illegal moves
-        bestMove = Functional.Mul((0.0001f + bestMove), legal);
+        bestMove = (0.0001f + bestMove) * legal;
         // Normalize probabilities so they sum to 1
         var redSum = Functional.ReduceSum(bestMove, new int[] { 1 }, true);
         bestMove /= redSum;
@@ -139,7 +139,6 @@ public class Othello : MonoBehaviour
                 ComputerMove();
             }
         }
-
     }
 
     Vector3 GetPiecePosition(int y, int x)
