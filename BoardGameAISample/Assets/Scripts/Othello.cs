@@ -1,5 +1,3 @@
-using System.Collections;
-using System.Collections.Generic;
 using UnityEngine;
 using Unity.Sentis;
 using UnityEngine.UI;
@@ -56,8 +54,8 @@ public class Othello : MonoBehaviour
     const int kRED = -1;  // Spirit
     int m_CurrentTurn = kBLACK; // keep track of who's turn it is to play
 
-    Tensor<float> m_Data = new(new TensorShape(1, 1, kBoardDimension, kBoardDimension));
-    Tensor<float> m_LegalMoves = new(new TensorShape(kBoardDimension * kBoardDimension + 1));
+    Tensor<float> m_Data;
+    Tensor<float> m_LegalMoves;
     Tensor<float> m_MoveProbabilities = null;
     GameObject[] m_Pieces = new GameObject[kBoardDimension * kBoardDimension];
 
@@ -91,10 +89,11 @@ public class Othello : MonoBehaviour
         bestMove /= redSum;
 
         var bestMoveModel = graph.Compile(boardState, bestMove);
-        bestMoveModel.AddOutput("board_state", 0);
-        bestMoveModel.AddOutput("best_move", 1);
 
         m_Engine = new Worker(bestMoveModel, BackendType.CPU);
+
+        m_Data = new Tensor<float>(new TensorShape(1, 1, kBoardDimension, kBoardDimension));
+        m_LegalMoves = new Tensor<float>(new TensorShape(kBoardDimension * kBoardDimension + 1));
 
         CreateBoard();
     }
@@ -249,10 +248,11 @@ public class Othello : MonoBehaviour
 
         m_Engine.Schedule(m_Data, m_LegalMoves);
 
-        // predict best move:
-        var bestMove = m_Engine.PeekOutput("best_move") as Tensor<float>;
         // estimate who is winning:
-        var boardState = m_Engine.PeekOutput("board_state") as Tensor<float>;
+        using var boardState = (m_Engine.PeekOutput(0) as Tensor<float>).ReadbackAndClone();
+        // predict best move:
+        m_MoveProbabilities?.Dispose();
+        m_MoveProbabilities = (m_Engine.PeekOutput(1) as Tensor<float>).ReadbackAndClone();
 
         float boardValue = boardState[0, 0];
         bool blackIsWinning = -m_CurrentTurn * boardValue < 0;
@@ -261,8 +261,6 @@ public class Othello : MonoBehaviour
         int percent = (int)(Mathf.Pow(Mathf.Abs(boardValue), 10f) * 50 + 50);
 
         DisplayPhrases(blackIsWinning, percent);
-
-        m_MoveProbabilities = bestMove.ReadbackAndClone();
 
         DisplayProbabilities();
 
@@ -565,7 +563,7 @@ public class Othello : MonoBehaviour
     {
         CancelInvoke();
         m_Engine?.Dispose();
-        m_MoveProbabilities.Dispose();
+        m_MoveProbabilities?.Dispose();
         m_Data.Dispose();
         m_LegalMoves.Dispose();
     }
