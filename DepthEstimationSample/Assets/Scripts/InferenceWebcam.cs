@@ -29,11 +29,9 @@ public class InferenceWebcam : MonoBehaviour
 
         var max0 = Functional.ReduceMax(output, new[] { 1, 2 }, false);
         var min0 = Functional.ReduceMin(output, new[] { 1, 2 }, false);
-        var subMax0Min0 = max0 - min0;
-        var subOutputMin0 = output - min0;
-        var output2 = subOutputMin0 / subMax0Min0;
+        output = (output - min0) / (max0 - min0);
 
-        model = graph.Compile(output2);
+        model = graph.Compile(output);
         modelLayerCount = model.layers.Count;
 
         m_engineEstimation = new Worker(model, BackendType.GPUCompute);
