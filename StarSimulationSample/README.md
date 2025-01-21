@@ -8,11 +8,9 @@ Star simulation demo showing how to use Sentis as a linear algebra library, solv
 
 Equations of motion can be written in matrix form (Hamiltonian mechanics https://en.wikipedia.org/wiki/Hamiltonian_mechanics).
 
-Sentis is at it's core a tensor base linear algebra engine, so you can use this to simulate a physical system in real time.
+Sentis is at its core a tensor-based linear algebra engine, so you can use this to simulate a physical system in real time.
 
-The strength resides in the simplicity of writing out the system and having efficient CPU/GPU code that will do the heavy lifting.
-
-At the same time staying on the GPU or Unity job system.
+The strength of this solution resides in the simplicity of writing out the system and efficient CPU/GPU code handling the intense computations while they remain on the GPU or Unity job system.
 
 ## Example
 
@@ -24,9 +22,9 @@ https://en.wikipedia.org/wiki/N-body_problem
 
 We want to simulate the equation of motions of N stars.
 
-Each star will be represented by a emissive sphere.
+Each star will be represented by an emissive sphere.
 
-Our physical system consists in 3 sets of tensors. 
+Our physical system consists in 3 sets of tensors.
 
 * Position : (N, 3) elements, x,y,z position per particle
 * Mass : (M) elements, m scalar per particle
@@ -42,14 +40,14 @@ We will use the current values to update the position and brightness of each sta
 
 We won't get into the specifics of the equations of motion here.
 
-But we write them out as matrix form (2D-tensor), using sentis [functional api](https://docs.unity3d.com/Packages/com.unity.sentis@1.6/manual/create-a-new-model.html).
+But we write them out as matrix form (2D-tensor), using sentis [functional api](https://docs.unity3d.com/Packages/com.unity.sentis@2.1/manual/create-a-new-model.html).
 
 This allows us to define sucessive tensor operations in a few lines of code, defining the system of equations to compute every frame.
-We compile this set of operation to a `Model` which then can be used as usual.
+We compile this set of operations to a `Model` which then can be used as usual.
 
 ## Accessing result on the GPU
 
-We will dispatch the work on the GPU by creating a [Compute Worker](https://docs.unity3d.com/Packages/com.unity.sentis@1.6/manual/create-an-engine.html).
+We will dispatch the work on the GPU by creating a [Compute Worker](https://docs.unity3d.com/Packages/com.unity.sentis@2.1/manual/create-an-engine.html).
 ```
 worker.SetInput("input_0", x);
 worker.SetInput("input_1", m);
@@ -60,7 +58,7 @@ var p_n = worker.PeekOutput("output_0") as TensorFloat;
 var x_n = worker.PeekOutput("output_1") as TensorFloat;
 ```
 
-The result will be the position and momentum tensor. Those tensor reside on the GPU and we can Pin them directly to a vertex shader to update the particles position.
+The result will be the position and momentum tensors. Those tensors reside on the GPU and we can pin them directly to a vertex shader to update the particles positions.
 
 ```
 Renderer renderer = planets[i].GetComponent<Renderer>();

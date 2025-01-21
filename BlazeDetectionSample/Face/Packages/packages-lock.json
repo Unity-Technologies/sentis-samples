@@ -27,8 +27,8 @@
       "url": "https://packages.unity.com"
     },
     "com.unity.collections": {
-      "version": "2.4.1",
-      "depth": 2,
+      "version": "2.4.3",
+      "depth": 1,
       "source": "registry",
       "dependencies": {
         "com.unity.burst": "1.8.13",
@@ -137,12 +137,12 @@
       "url": "https://packages.unity.com"
     },
     "com.unity.sentis": {
-      "version": "2.0.0",
+      "version": "2.1.0",
       "depth": 0,
       "source": "registry",
       "dependencies": {
-        "com.unity.burst": "1.8.12",
-        "com.unity.collections": "2.2.1",
+        "com.unity.burst": "1.8.17",
+        "com.unity.collections": "2.4.3",
         "com.unity.modules.imageconversion": "1.0.0"
       },
       "url": "https://packages.unity.com"

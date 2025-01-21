@@ -25,6 +25,6 @@ public class Player : MonoBehaviour
         }
 
         Vector3 pushDir = new Vector3(hit.moveDirection.x, 0, hit.moveDirection.z);
-        body.velocity = pushDir * pushPower;
+        body.linearVelocity = pushDir * pushPower;
     }
 }

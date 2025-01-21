@@ -179,7 +179,7 @@ public class WashiLightController : MonoBehaviour
         bounds.Encapsulate(transform.TransformPoint(new Vector3(x, -y, -z)));
         bounds.Encapsulate(transform.TransformPoint(new Vector3(-x, -y, -z)));
 
-        renderers = FindObjectsOfType<Renderer>(includeInactive).Where(r => {
+        renderers = FindObjectsByType<Renderer>(includeInactive ? FindObjectsInactive.Include : FindObjectsInactive.Exclude, FindObjectsSortMode.None).Where(r => {
             return r.bounds.Intersects(bounds) && r.gameObject.name.Contains(objectsSearchFilter) && ((shaderSearchFilter == null) ? true : r.sharedMaterials.Any(m => m.shader == shaderSearchFilter));
         }).ToArray();
     }

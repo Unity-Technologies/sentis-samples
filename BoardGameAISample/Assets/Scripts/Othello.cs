@@ -1,5 +1,3 @@
-using System.Collections;
-using System.Collections.Generic;
 using UnityEngine;
 using Unity.Sentis;
 using UnityEngine.UI;
@@ -13,8 +11,7 @@ public class Othello : MonoBehaviour
 {
     // Sentis
     public ModelAsset model;
-    IWorker m_Engine;
-    Ops m_Ops;
+    Worker m_Engine;
 
     // Board logic
     public AudioClip pieceDown, illegalMoveBuzzer;
@@ -57,9 +54,9 @@ public class Othello : MonoBehaviour
     const int kRED = -1;  // Spirit
     int m_CurrentTurn = kBLACK; // keep track of who's turn it is to play
 
-    TensorFloat m_Data = TensorFloat.Zeros(new TensorShape(1, 1, kBoardDimension, kBoardDimension));
-    float[] m_LegalMoves = new float[kBoardDimension * kBoardDimension + 1];
-    TensorFloat m_MoveProbabilities = null;
+    Tensor<float> m_Data;
+    Tensor<float> m_LegalMoves;
+    Tensor<float> m_MoveProbabilities = null;
     GameObject[] m_Pieces = new GameObject[kBoardDimension * kBoardDimension];
 
     int m_PassesInARow = 0;
@@ -73,9 +70,30 @@ public class Othello : MonoBehaviour
     void Start()
     {
         // Load in the neural network that will make the move predictions for the spirit + create inference engine
-        m_Engine = WorkerFactory.CreateWorker(BackendType.CPU, ModelLoader.Load(model));
-        // ops for tensor handling
-        m_Ops = new CPUOps();
+        var othelloModel = ModelLoader.Load(model);
+
+        var graph = new FunctionalGraph();
+        var inputs = graph.AddInputs(othelloModel);
+        var outputs = Functional.Forward(othelloModel, inputs);
+        var boardState = outputs[0];
+        var bestMove = outputs[1];
+
+        // Ensure legal moves are considered when computing best move.
+        var legal = graph.AddInput(DataType.Float, new TensorShape(kBoardDimension * kBoardDimension + 1));
+        // Convert outputs to probabilities
+        bestMove = Functional.Exp(bestMove * m_AIDifficultyTemperature);
+        // Mask out illegal moves
+        bestMove = (0.0001f + bestMove) * legal;
+        // Normalize probabilities so they sum to 1
+        var redSum = Functional.ReduceSum(bestMove, new int[] { 1 }, true);
+        bestMove /= redSum;
+
+        var bestMoveModel = graph.Compile(boardState, bestMove);
+
+        m_Engine = new Worker(bestMoveModel, BackendType.CPU);
+
+        m_Data = new Tensor<float>(new TensorShape(1, 1, kBoardDimension, kBoardDimension));
+        m_LegalMoves = new Tensor<float>(new TensorShape(kBoardDimension * kBoardDimension + 1));
 
         CreateBoard();
     }
@@ -121,7 +139,6 @@ public class Othello : MonoBehaviour
                 ComputerMove();
             }
         }
-        
     }
 
     Vector3 GetPiecePosition(int y, int x)
@@ -187,10 +204,10 @@ public class Othello : MonoBehaviour
         m_Data[(kBoardDimension / 2 - 1), (kBoardDimension / 2)] = kBLACK;
         m_Data[(kBoardDimension / 2), (kBoardDimension / 2 - 1)] = kBLACK;
         m_Data[(kBoardDimension / 2 - 1), (kBoardDimension / 2 - 1)] = kRED;
-        
+
         m_PassesInARow = 0;
         m_LastWinning = 0;
-        
+
         SetColors(kRED);
         m_CurrentTurn = kBLACK;
         SetSubtitle("Let's play. You begin.");
@@ -218,7 +235,7 @@ public class Othello : MonoBehaviour
 
     void FlipBoard()
     {
-        for (int i = 0; i < m_Data.shape.length; i++) 
+        for (int i = 0; i < m_Data.shape.length; i++)
             m_Data[i] *= -1;
     }
 
@@ -228,41 +245,23 @@ public class Othello : MonoBehaviour
         // The network is always form the point of view that the current player = 1 and opponent = -1
         FlipBoard();
 
-        m_Engine.Execute(m_Data);
+        m_Engine.Schedule(m_Data, m_LegalMoves);
 
-        m_Data.MakeReadable();
-
-        // predict best move:
-        var bestMove = m_Engine.PeekOutput("best_move") as TensorFloat;
         // estimate who is winning:
-        var boardState = m_Engine.PeekOutput("board_state") as TensorFloat;
+        using var boardState = (m_Engine.PeekOutput(0) as Tensor<float>).ReadbackAndClone();
+        // predict best move:
+        m_MoveProbabilities?.Dispose();
+        m_MoveProbabilities = (m_Engine.PeekOutput(1) as Tensor<float>).ReadbackAndClone();
 
-        boardState.MakeReadable();
         float boardValue = boardState[0, 0];
         bool blackIsWinning = -m_CurrentTurn * boardValue < 0;
 
         //convert the boardValue [-1,1] into a more human readable number:
         int percent = (int)(Mathf.Pow(Mathf.Abs(boardValue), 10f) * 50 + 50);
 
-        TensorFloat legal = new TensorFloat(new TensorShape(1, kBoardDimension * kBoardDimension + 1), m_LegalMoves);
-
         DisplayPhrases(blackIsWinning, percent);
 
-        // Convert outputs to probabilities:
-        bestMove = m_Ops.Exp(m_Ops.Mul(bestMove, m_AIDifficultyTemperature));
-        // Mask out illegal moves:
-        bestMove = m_Ops.Mul(m_Ops.Add(0.0001f, bestMove), legal);
-        // Normalize probabilities so they sum to 1
-        bestMove = m_Ops.Div(bestMove, m_Ops.ReduceSum(bestMove, new int[] { 1 }, true));
-
-        bestMove.MakeReadable();
-
-        m_MoveProbabilities = bestMove;
-        m_MoveProbabilities.TakeOwnership();
-
         DisplayProbabilities();
-
-        legal?.Dispose();
 
         Invoke("MakeMove", m_PauseTime);
     }
@@ -351,7 +350,7 @@ public class Othello : MonoBehaviour
         }
     }
 
-    void MakeMove() 
+    void MakeMove()
     {
         ClearProbabilityDisplay();
         int moveIndex = SelectRandomMove();
@@ -413,7 +412,7 @@ public class Othello : MonoBehaviour
                 int enemyPieces = 0;
                 // check for a line of enemy pieces in direction (dx,dy):
                 while (Y >= 0 && X >= 0 && X < kBoardDimension && Y < kBoardDimension && m_Data[Y * kBoardDimension + X] == -turn)
-                {                  
+                {
                     X += dx; Y += dy;
                     enemyPieces++;
                 }
@@ -490,7 +489,7 @@ public class Othello : MonoBehaviour
             float mouseY = Input.GetAxis("Mouse Y") * mouseSensititvy;
 
             cameraAngleLR = cameraAngleLR + mouseX;
-            
+
             cameraAngleUp = Mathf.Clamp(cameraAngleUp - mouseY, -45, 45);
             Camera.main.transform.localEulerAngles = new Vector3(cameraAngleUp, cameraAngleLR, 0);
         }
@@ -521,7 +520,7 @@ public class Othello : MonoBehaviour
         Ray ray = Camera.main.ScreenPointToRay(Input.mousePosition);
         if (!Physics.Raycast(ray, out RaycastHit hit, 1000))
             return;
-        
+
         GameObject go = hit.collider.gameObject;
 
         if (HasParent(go.transform, "Opponent Easy"))
@@ -536,7 +535,7 @@ public class Othello : MonoBehaviour
         {
             LevelOptionSelected(kRED, 2);
         }
-           
+
         int index = System.Array.IndexOf(m_Pieces, go);
         if (index < 0)
             return;
@@ -556,16 +555,15 @@ public class Othello : MonoBehaviour
         {
             GetComponent<AudioSource>().PlayOneShot(illegalMoveBuzzer);
             Debug.Log("Can't go there");
-        }  
+        }
     }
 
     private void OnApplicationQuit()
     {
         CancelInvoke();
         m_Engine?.Dispose();
-        m_MoveProbabilities.Dispose();
+        m_MoveProbabilities?.Dispose();
         m_Data.Dispose();
-
-        m_Ops.Dispose();
+        m_LegalMoves.Dispose();
     }
 }
