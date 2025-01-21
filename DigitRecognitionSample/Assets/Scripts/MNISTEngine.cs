@@ -1,8 +1,5 @@
-using System.Collections;
-using System.Collections.Generic;
 using UnityEngine;
 using Unity.Sentis;
-using System.Linq;
 
 /*
  *  Neural net engine and handles the inference.
@@ -29,7 +26,7 @@ public class MNISTEngine : MonoBehaviour
     Worker engine;
 
     // This small model works just as fast on the CPU as well as the GPU:
-    static Unity.Sentis.BackendType backendType = Unity.Sentis.BackendType.GPUCompute;
+    static BackendType backendType = BackendType.GPUCompute;
 
     // width and height of the image:
     const int imageWidth = 28;
@@ -38,7 +35,6 @@ public class MNISTEngine : MonoBehaviour
     Tensor<float> inputTensor = null;
 
     Camera lookCamera;
-
 
     void Start()
     {
@@ -66,10 +62,8 @@ public class MNISTEngine : MonoBehaviour
     // Sends the image to the neural network model and returns the probability that the image is each particular digit.
     public (float, int) GetMostLikelyDigitProbability(Texture2D drawableTexture)
     {
-        inputTensor?.Dispose();
-
         // Convert the texture into a tensor, it has width=W, height=W, and channels=1:
-        inputTensor = TextureConverter.ToTensor(drawableTexture, imageWidth, imageWidth, 1);
+        TextureConverter.ToTensor(drawableTexture, inputTensor, new TextureTransform());
 
         // run the neural network:
         engine.Schedule(inputTensor);
@@ -126,5 +120,4 @@ public class MNISTEngine : MonoBehaviour
         inputTensor?.Dispose();
         engine?.Dispose();
     }
-
 }
