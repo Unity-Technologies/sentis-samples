@@ -40,8 +40,8 @@ public class HandDetection : MonoBehaviour
         var graph = new FunctionalGraph();
         var input = graph.AddInput(handDetectorModel, 0);
         var outputs = Functional.Forward(handDetectorModel, input);
-        var boxes = outputs[1]; // (1, 2016, 18)
-        var scores = outputs[0]; // (1, 2016, 1)
+        var boxes = outputs[0]; // (1, 2016, 18)
+        var scores = outputs[1]; // (1, 2016, 1)
         var idx_scores_boxes = BlazeUtils.ArgMaxFiltering(boxes, scores);
         handDetectorModel = graph.Compile(idx_scores_boxes.Item1, idx_scores_boxes.Item2, idx_scores_boxes.Item3);
 
