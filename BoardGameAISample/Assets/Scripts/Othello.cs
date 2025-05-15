@@ -69,29 +69,6 @@ public class Othello : MonoBehaviour
 
     void Start()
     {
-        // Load in the neural network that will make the move predictions for the spirit + create inference engine
-        var othelloModel = ModelLoader.Load(model);
-
-        var graph = new FunctionalGraph();
-        var inputs = graph.AddInputs(othelloModel);
-        var outputs = Functional.Forward(othelloModel, inputs);
-        var boardState = outputs[0];
-        var bestMove = outputs[1];
-
-        // Ensure legal moves are considered when computing best move.
-        var legal = graph.AddInput(DataType.Float, new TensorShape(kBoardDimension * kBoardDimension + 1));
-        // Convert outputs to probabilities
-        bestMove = Functional.Exp(bestMove * m_AIDifficultyTemperature);
-        // Mask out illegal moves
-        bestMove = (0.0001f + bestMove) * legal;
-        // Normalize probabilities so they sum to 1
-        var redSum = Functional.ReduceSum(bestMove, new int[] { 1 }, true);
-        bestMove /= redSum;
-
-        var bestMoveModel = graph.Compile(boardState, bestMove);
-
-        m_Engine = new Worker(bestMoveModel, BackendType.CPU);
-
         m_Data = new Tensor<float>(new TensorShape(1, 1, kBoardDimension, kBoardDimension));
         m_LegalMoves = new Tensor<float>(new TensorShape(kBoardDimension * kBoardDimension + 1));
 
@@ -184,6 +161,8 @@ public class Othello : MonoBehaviour
         if (level == 1) m_AIDifficultyTemperature = 0.5f;
         if (level == 2) m_AIDifficultyTemperature = 2f;
 
+        CreateEngine();
+
         if (m_GameMode == GameMode.CHOOSE_CHARACTER)
         {
             m_GameMode = GameMode.PLAY_GAME;
@@ -191,6 +170,34 @@ public class Othello : MonoBehaviour
         }
 
         NextMove();
+    }
+
+    void CreateEngine()
+    {
+        m_Engine?.Dispose();
+
+         // Load in the neural network that will make the move predictions for the spirit + create inference engine
+        var othelloModel = ModelLoader.Load(model);
+
+        var graph = new FunctionalGraph();
+        var inputs = graph.AddInputs(othelloModel);
+        var outputs = Functional.Forward(othelloModel, inputs);
+        var bestMove = outputs[0];
+        var boardState = outputs[1];
+
+        // Ensure legal moves are considered when computing best move.
+        var legal = graph.AddInput(DataType.Float, new TensorShape(kBoardDimension * kBoardDimension + 1));
+        // Convert outputs to probabilities
+        bestMove = Functional.Exp(bestMove * m_AIDifficultyTemperature);
+        // Mask out illegal moves
+        bestMove = (0.0001f + bestMove) * legal;
+        // Normalize probabilities so they sum to 1
+        var redSum = Functional.ReduceSum(bestMove, new int[] { 1 }, true);
+        bestMove /= redSum;
+
+        var bestMoveModel = graph.Compile(boardState, bestMove);
+
+        m_Engine = new Worker(bestMoveModel, BackendType.CPU);
     }
 
     void ResetBoard()
