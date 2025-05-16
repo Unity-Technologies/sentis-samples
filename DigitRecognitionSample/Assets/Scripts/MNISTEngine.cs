@@ -1,5 +1,5 @@
 using UnityEngine;
-using Unity.Sentis;
+using Unity.InferenceEngine;
 
 /*
  *  Neural net engine and handles the inference.

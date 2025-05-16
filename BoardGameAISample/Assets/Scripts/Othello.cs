@@ -1,5 +1,5 @@
 using UnityEngine;
-using Unity.Sentis;
+using Unity.InferenceEngine;
 using UnityEngine.UI;
 
 
@@ -9,7 +9,6 @@ using UnityEngine.UI;
 // Output of the model which gives estimates who is winning given the current state of the game is used to trigger quotes for the characters.
 public class Othello : MonoBehaviour
 {
-    // Sentis
     public ModelAsset model;
     Worker m_Engine;
 

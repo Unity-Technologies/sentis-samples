@@ -1,10 +1,10 @@
-# BlazeFace in Sentis
+# BlazeFace in Inference Engine
 
 BlazeFace is a fast, light-weight face detector from Google Research. A pretrained model is available as part of Google's [MediaPipe](https://ai.google.dev/edge/mediapipe/solutions/vision/face_detector) framework.
 
 ![](../images/face.jpg)
 
-The BlazeFace model has been converted from TFLite to ONNX for use in Sentis using [tf2onnx](https://github.com/onnx/tensorflow-onnx) with the default export parameters.
+The BlazeFace model has been converted from TFLite to ONNX for use in Inference Engine using [tf2onnx](https://github.com/onnx/tensorflow-onnx) with the default export parameters.
 
 ## Functional API
 
@@ -14,7 +14,7 @@ Each of the 896 boxes consists of:
 - [x position, y position, width, height] for the bounding box. The position is relative to the anchor position for the given index, these are precalculated and loaded from a csv file.
 - [x position, y position] for each of 6 facial keypoints relative to the anchor position.
 
-We adapt the model using the Sentis functional API to apply non maximum suppression to filter the boxes with the highest scores that don't overlap with each other.
+We adapt the model using the Inference Engine functional API to apply non maximum suppression to filter the boxes with the highest scores that don't overlap with each other.
 ```
 var xCenter = rawBoxes[0, .., 0] + anchors[.., 0] * inputSize;
 var yCenter = rawBoxes[0, .., 1] + anchors[.., 1] * inputSize;
@@ -68,4 +68,4 @@ In this demo we visualize the four faces with the highest scores that pass the s
 ## Notes
 This model has been trained primarily for short-range faces in images taken using the front-facing smartphone camera, results may be poor for longer-range images of faces.
 
-The non max suppression operator requires a blocking GPU readback, this prevents this demo from running on the WebGPU backend in Unity 6 and Sentis 2.0.
+The non max suppression operator requires a blocking GPU readback, this prevents this demo from running on the WebGPU backend in Unity 6 and Inference Engine 2.2.

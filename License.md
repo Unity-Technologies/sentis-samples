@@ -1,4 +1,4 @@
-Sentis copyright © 2023 Unity Technologies.
+Inference Engine copyright © 2023 Unity Technologies.
 
 Licensed under the Unity Terms of Service as an Experimental / Evaluation Version ( see https://unity.com/legal/terms-of-service.).
 

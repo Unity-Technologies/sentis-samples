@@ -1,5 +1,5 @@
 using UnityEngine;
-using Unity.Sentis;
+using Unity.InferenceEngine;
 
 public class Gravity : MonoBehaviour
 {
@@ -28,7 +28,6 @@ public class Gravity : MonoBehaviour
         // Randomize positions, momenta and masses
         for (int i = 0; i < N; i++)
         {
-
             Vector3 pos = UnityEngine.Random.insideUnitSphere;
             x[i, 0] = pos.x * 10;
             x[i, 1] = pos.y;

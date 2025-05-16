@@ -1,7 +1,6 @@
-# Sentis-samples
-Sentis samples internal development repository. 
+# Inference Engine Samples
 
-Contains example and template projects for Sentis package use.
+Contains example and template projects for Inference Engine package use.
 ## Samples
 [Blaze Face/Hand/Pose Detection](BlazeDetectionSample/README.md)
 
@@ -11,7 +10,7 @@ Contains example and template projects for Sentis package use.
 
 [Depth Estimation](DepthEstimationSample/README.md)
 
-[Protein Folding](ProteinFoldingSample/README.md)
-
 [Star Simulation](StarSimulationSample/README.md)
+
+[Protein Folding](ProteinFoldingSample/README.md) (only compatible with Sentis 1.X)
 

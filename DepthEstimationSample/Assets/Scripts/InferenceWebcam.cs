@@ -1,6 +1,6 @@
 using System.Collections;
 using UnityEngine;
-using Unity.Sentis;
+using Unity.InferenceEngine;
 
 public class InferenceWebcam : MonoBehaviour
 {

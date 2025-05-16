@@ -1,9 +1,5 @@
-using System.Collections;
-using System.Collections.Generic;
 using UnityEngine;
-using Unity.Sentis;
 using UnityEngine.UI;
-using System.Linq;
 
 /*
  *  Manages Pannel

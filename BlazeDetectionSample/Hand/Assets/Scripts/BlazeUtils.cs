@@ -1,7 +1,7 @@
 using System;
 using System.Globalization;
 using Unity.Mathematics;
-using Unity.Sentis;
+using Unity.InferenceEngine;
 using UnityEngine;
 
 public static class BlazeUtils

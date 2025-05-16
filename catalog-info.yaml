@@ -5,7 +5,7 @@ metadata:
   annotations:
     github.com/project-slug: Unity-Technologies/sentis-samples
   name: sentis-samples
-  description: "Sentis samples internal development repository. Contains example and template project for Sentis package use."
+  description: "Inference Engine samples internal development repository. Contains example and template project for Inference Engine package use."
   labels:
     costcenter: "5010"
   tags:

@@ -1,5 +1,7 @@
 # Protein Folding Sample
 
+This sample is not compatible with Inference Engine, only Sentis 1.X.
+
 Protein folding visualization demo showing how to render and visualize protein folding in real time 3D.
 
 ![image info](./Documentation/main.jpg)

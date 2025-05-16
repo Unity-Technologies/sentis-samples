@@ -1,6 +1,6 @@
 using System;
 using Unity.Mathematics;
-using Unity.Sentis;
+using Unity.InferenceEngine;
 using UnityEngine;
 
 public class FaceDetection : MonoBehaviour
