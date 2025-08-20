@@ -1,4 +1,5 @@
 using System;
+using System.Threading.Tasks;
 using Unity.InferenceEngine.Samples.Chat.LLM_Chat.Network;
 using UnityEditor;
 using UnityEngine;
@@ -56,13 +57,20 @@ namespace Unity.InferenceEngine.Samples.Chat
         [MenuItem("Inference Engine/Sample/Chat/Start Chat", true)]
         public static bool OpenWindowValidate()
         {
-            return false;
+            return ModelDownloader.VerifyModelsExist();
         }
 
         [MenuItem("Inference Engine/Sample/Chat/Download Models")]
-        public static async void DownloadModels()
+        public static async Task DownloadModels()
         {
-            await ModelDownloader.DownloadModels();
+            var modelDownloader = new ModelDownloader();
+            await modelDownloader.DownloadModels();
+        }
+
+        [MenuItem("Inference Engine/Sample/Chat/Download Models", true)]
+        public static bool DownloadModelsValidate()
+        {
+            return !ModelDownloader.VerifyModelsExist();
         }
 
         public void Dispose()

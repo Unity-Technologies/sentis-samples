@@ -8,15 +8,15 @@ namespace Unity.InferenceEngine.Samples.Chat
 
         public const string DecoderModelName = "decoder_model_merged";
         public const string DecoderModelFile =  DecoderModelName + ".onnx";
-        public const string DecoderModelPath = "Models/" + DecoderModelName;
+        public const string DecoderModelPath = "Models/onnx/" + DecoderModelName;
 
         public const string VisionEncoderModelName = "vision_encoder";
         public const string VisionEncoderModelFile = VisionEncoderModelName + ".onnx";
-        public const string VisionEncoderModelPath = "Models/" + VisionEncoderModelName;
+        public const string VisionEncoderModelPath = "Models/onnx/" + VisionEncoderModelName;
 
         public const string EmbeddingModelName = "embed_tokens";
         public const string EmbeddingModelFile = EmbeddingModelName + ".onnx";
-        public const string EmbeddingModelPath = "Models/" + EmbeddingModelName;
+        public const string EmbeddingModelPath = "Models/onnx/" + EmbeddingModelName;
 
         public const string TokenizerModelName = "tokenizer";
         public const string TokenizerModelFile = TokenizerModelName + ".json";
