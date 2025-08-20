@@ -63,7 +63,7 @@ namespace Unity.InferenceEngine.Samples.Chat
         }
         static JObject GetTokenizerConfig()
         {
-            var asset = AssetDatabase.LoadAssetAtPath<TextAsset>(LlavaConfig.TokenizerConfigPath);
+            var asset = Resources.Load<TextAsset>(LlavaConfig.TokenizerConfigPath);
             return JObject.Parse(asset.text);
         }
 

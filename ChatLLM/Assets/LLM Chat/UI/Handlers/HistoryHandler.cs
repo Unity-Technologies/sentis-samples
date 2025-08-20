@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using Unity.AppUI.Redux;
+using UnityEngine;
 using UnityEngine.UIElements;
 
 namespace Unity.InferenceEngine.Samples.Chat
@@ -35,6 +36,8 @@ namespace Unity.InferenceEngine.Samples.Chat
                 }
 
                 m_ChatEntryElements[i].SetChatEntry(newState.Entries[i]);
+
+                m_HistoryListView.scrollOffset = new Vector2(0, int.MaxValue);
             }
         }
     }

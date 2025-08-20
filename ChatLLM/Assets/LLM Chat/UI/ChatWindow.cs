@@ -1,4 +1,5 @@
 using System;
+using Unity.InferenceEngine.Samples.Chat.LLM_Chat.Network;
 using UnityEditor;
 using UnityEngine;
 using UnityEngine.UIElements;
@@ -7,7 +8,7 @@ namespace Unity.InferenceEngine.Samples.Chat
 {
     sealed class ChatWindow : EditorWindow, IDisposable
     {
-        const string k_VisualTreePath = "Packages/com.unity.ai.inference/Samples/LLM Chat/llava/UI/ChatWindow.uxml";
+        const string k_VisualTreePath = "UI/ChatWindow";
 
         InputHandler m_InputHandler;
         HistoryHandler m_HistoryHandler;
@@ -17,7 +18,9 @@ namespace Unity.InferenceEngine.Samples.Chat
 
         public void CreateGUI()
         {
-            var visualTree = AssetDatabase.LoadAssetAtPath<VisualTreeAsset>(k_VisualTreePath);
+            rootVisualElement.Clear();
+
+            var visualTree = Resources.Load<VisualTreeAsset>(k_VisualTreePath);
             if (visualTree != null)
             {
                 visualTree.CloneTree(rootVisualElement);
@@ -41,13 +44,25 @@ namespace Unity.InferenceEngine.Samples.Chat
             Dispose();
         }
 
-        [MenuItem("Inference Engine/Sample/Chat")]
+        [MenuItem("Inference Engine/Sample/Chat/Start Chat")]
         public static void OpenWindow()
         {
             var window = GetWindow<ChatWindow>();
             window.titleContent = new GUIContent("Chat");
             window.minSize = new Vector2(300, 400);
             window.Show();
+        }
+
+        [MenuItem("Inference Engine/Sample/Chat/Start Chat", true)]
+        public static bool OpenWindowValidate()
+        {
+            return false;
+        }
+
+        [MenuItem("Inference Engine/Sample/Chat/Download Models")]
+        public static async void DownloadModels()
+        {
+            await ModelDownloader.DownloadModels();
         }
 
         public void Dispose()

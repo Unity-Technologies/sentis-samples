@@ -1,5 +1,6 @@
 using System;
 using UnityEditor;
+using UnityEngine;
 
 namespace Unity.InferenceEngine.Samples.Chat
 {
@@ -23,7 +24,7 @@ namespace Unity.InferenceEngine.Samples.Chat
         {
             if (m_Model != null) return;
 
-            var modelAsset = AssetDatabase.LoadAssetAtPath<ModelAsset>(ModelPath);
+            var modelAsset = Resources.Load<ModelAsset>(ModelPath);
 
             if (modelAsset == null)
             {

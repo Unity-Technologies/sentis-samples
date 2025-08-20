@@ -1,0 +1,100 @@
+// This file is generated. Do not modify by hand.
+// XML documentation file not found. To check if public methods have XML comments,
+// make sure the XML doc file is present and located next to the scraped dll
+namespace HuggingfaceHub
+{
+    public static class HFDownloader
+    {
+        public static Microsoft.Extensions.Logging.ILogger Logger { get; set; }
+        public static System.Threading.Tasks.Task<string> DownloadFileAsync(string repoId, string filename, string subfolder = default(string), string revision = default(string), string cacheDir = default(string), string localDir = default(string), System.Nullable<bool> localDirUseSymlinks = default(System.Nullable<bool>), System.Collections.Generic.IDictionary<string, string> userAgent = default(System.Collections.Generic.IDictionary<string, string>), bool forceDownload = false, string proxy = default(string), int etagTimeout = -1, string token = default(string), bool localFilesOnly = false, bool resumeDownload = false, string endpoint = default(string), System.IProgress<int> progress = default(System.IProgress<int>));
+        public static System.Threading.Tasks.Task<string> DownloadSnapshotAsync(string repoId, string revision = default(string), string cacheDir = default(string), string localDir = default(string), System.Nullable<bool> localDirUseSymlinks = default(System.Nullable<bool>), System.Collections.Generic.IDictionary<string, string> userAgent = default(System.Collections.Generic.IDictionary<string, string>), bool forceDownload = false, string proxy = default(string), int etagTimeout = -1, string token = default(string), bool localFilesOnly = false, string[] allowPatterns = default(string[]), string[] ignorePatterns = default(string[]), int maxWorkers = 8, IGroupedProgress progress = default(IGroupedProgress), string endpoint = default(string));
+        public static System.Threading.Tasks.Task<Common.HfFileMetadata> GetHfFileMetadata(System.Uri uri, string token = default(string), string proxy = default(string), int timeout = -1, System.Collections.Generic.IDictionary<string, string> userAgent = default(System.Collections.Generic.IDictionary<string, string>));
+        public static string GetHuggingfaceFileUrl(string repoId, string filename, string subfolder = default(string), string revision = default(string), string endpoint = default(string));
+        public static System.Threading.Tasks.Task<Common.ModelInfo> GetModelInfoAsync(string repoId, string revision = @"main", System.Nullable<int> timeout = default(System.Nullable<int>), bool securityStatus = false, bool filesMetadata = false, string token = default(string), string endpoint = default(string));
+        public static string RepoFolderName(string repoId, string repoType);
+    }
+
+    public static class HFGlobalConfig
+    {
+        public static string HUGGINGFACE_HEADER_X_LINKED_ETAG = @"X-Linked-Etag";
+        public static string HUGGINGFACE_HEADER_X_LINKED_SIZE = @"X-Linked-Size";
+        public static string HUGGINGFACE_HEADER_X_REPO_COMMIT = @"X-Repo-Commit";
+        public static System.Text.RegularExpressions.Regex CommitHashRegex { get; set; }
+        public static string DefaultAssetCachePath { get; set; }
+        public static string DefaultCacheDir { get; set; }
+        public static int DefaultDownloadTimeout { get; set; }
+        public static int DefaultEtagTimeout { get; set; }
+        public static int DefaultRequestTimeout { get; set; }
+        public static string DefaultRevision { get; set; }
+        public static int DownloadChunkSize { get; set; }
+        public static string EndPoint { get; set; }
+        public static string Home { get; set; }
+        public static int LocalDirAutoSymlinkThreshold { get; set; }
+        public static string RepoIdSeparator { get; set; }
+    }
+
+    public interface IGroupedProgress
+    {
+        public void Report(string filename, int progress);
+    }
+}
+
+namespace HuggingfaceHub.Common
+{
+    public class BlobLfsInfo
+    {
+        [Newtonsoft.Json.JsonProperty(@"date")] public string Date { get; set; }
+        [Newtonsoft.Json.JsonProperty(@"oid")] public string Oid { get; set; }
+        [Newtonsoft.Json.JsonProperty(@"title")] public string Title { get; set; }
+        public BlobLfsInfo() {}
+    }
+
+    public class HfFileMetadata : System.IEquatable<HfFileMetadata>
+    {
+        public string CommitHash { get; set; }
+        protected virtual System.Type EqualityContract { get; }
+        public System.Net.Http.Headers.EntityTagHeaderValue Etag { get; set; }
+        public System.Uri Location { get; set; }
+        public System.Nullable<long> Size { get; set; }
+        protected HfFileMetadata(HfFileMetadata original) {}
+        public HfFileMetadata(string CommitHash, System.Net.Http.Headers.EntityTagHeaderValue Etag, System.Uri Location, System.Nullable<long> Size) {}
+        public virtual HfFileMetadata <Clone>$();
+        public void Deconstruct(out string CommitHash, out System.Net.Http.Headers.EntityTagHeaderValue Etag, out System.Uri Location, out System.Nullable<long> Size);
+        public virtual bool Equals(HfFileMetadata other);
+        public override bool Equals(object obj);
+        public override int GetHashCode();
+        public static bool operator ==(HfFileMetadata left, HfFileMetadata right);
+        public static bool operator !=(HfFileMetadata left, HfFileMetadata right);
+        protected virtual bool PrintMembers(System.Text.StringBuilder builder);
+        public override string ToString();
+    }
+
+    public class ModelInfo
+    {
+        [Newtonsoft.Json.JsonProperty(@"author")] public string Author { get; set; }
+        [Newtonsoft.Json.JsonProperty(@"created_at")] public string CreatedAt { get; set; }
+        [Newtonsoft.Json.JsonProperty(@"disabled")] public bool Disabled { get; set; }
+        [Newtonsoft.Json.JsonProperty(@"downloads")] public int Downloads { get; set; }
+        [Newtonsoft.Json.JsonProperty(@"id")] public string Id { get; set; }
+        [Newtonsoft.Json.JsonProperty(@"last_modified")] public string LastModified { get; set; }
+        [Newtonsoft.Json.JsonProperty(@"library_name")] public string LibraryName { get; set; }
+        [Newtonsoft.Json.JsonProperty(@"likes")] public int Likes { get; set; }
+        [Newtonsoft.Json.JsonProperty(@"mask_token")] public string MaskToken { get; set; }
+        [Newtonsoft.Json.JsonProperty(@"pipeline_tag")] public string PipelineTag { get; set; }
+        [Newtonsoft.Json.JsonProperty(@"private")] public bool Private { get; set; }
+        [Newtonsoft.Json.JsonProperty(@"sha")] public string Sha { get; set; }
+        [Newtonsoft.Json.JsonProperty(@"siblings")] public RepoSibling[] Siblings { get; set; }
+        [Newtonsoft.Json.JsonProperty(@"spaces")] public string[] Spaces { get; set; }
+        [Newtonsoft.Json.JsonProperty(@"tags")] public string[] Tags { get; set; }
+        public ModelInfo() {}
+    }
+
+    public class RepoSibling
+    {
+        [Newtonsoft.Json.JsonProperty(@"blob_id")] public string BlobId { get; set; }
+        [Newtonsoft.Json.JsonProperty(@"rfilename")] public string Filename { get; set; }
+        [Newtonsoft.Json.JsonProperty(@"lfs")] public BlobLfsInfo Lfs { get; set; }
+        [Newtonsoft.Json.JsonProperty(@"size")] public int Size { get; set; }
+        public RepoSibling() {}
+    }
+}

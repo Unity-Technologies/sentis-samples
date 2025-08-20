@@ -14,7 +14,7 @@ namespace Unity.InferenceEngine.Samples.Chat
         {
             var runner = new LlavaRunner();
 
-            var testTexture = AssetDatabase.LoadAssetAtPath<Texture2D>("Packages/com.unity.ai.generators/Modules/IN-DEVELOPMENT-IGNORED/Unity.AI.Search.Editor/Models/llava/Tests/Test-Image.png");
+            var testTexture = AssetDatabase.LoadAssetAtPath<Texture2D>("Assets/LLM Chat/Tests/Test-Image.png");
             var predictionTokens = runner.GetPredictionTokenAsync(testTexture, "You are a labeling tool. Only provide descriptions. Here is a Texture2D asset. Describe its content.", 256);
             var tokenList = new List<int>();
             await foreach (var token in predictionTokens)
