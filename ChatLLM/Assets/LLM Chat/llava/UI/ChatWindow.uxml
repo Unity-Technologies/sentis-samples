@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ui:UXML
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xmlns:ui="UnityEngine.UIElements"
+        xmlns:appui="Unity.AppUI.UI"
+        xsi:noNamespaceSchemaLocation="../../../../../../../../UIElementsSchema/UIElements.xsd"
+>
+    <ui:Style
+            src="project://database/Packages/com.unity.dt.app-ui/PackageResources/Styles/Themes/App UI - Editor Dark - Small.tss"/>
+    <ui:Style src="ChatWindow.uss"/>
+    <appui:Panel>
+        <ui:ScrollView name="Chat History" class="chat-history"/>
+        <ui:VisualElement name="Chat Input" class="chat-input">
+            <appui:IconButton name="Attach Button" class="attach-button" quiet="true" icon="link"/>
+            <appui:TextField name="Input Field" class="input-field" multiline="true" placeholder="Send a message"/>
+            <appui:IconButton name="Send Button" class="send-button" quiet="true" icon="play"/>
+        </ui:VisualElement>
+    </appui:Panel>
+</ui:UXML>

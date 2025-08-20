@@ -1,0 +1,11 @@
+{
+  "name": "com.unity.ml-tools",
+  "displayName": "ML Tools",
+  "version": "0.1.0-exp.1",
+  "unity": "2023.2",
+  "description": "Provides Machive Learning tools for Unity, such as inference engine agnostic Tokenization Pipeline, and diffusers built on top of Sentis",
+  "dependencies": {
+    "com.unity.nuget.newtonsoft-json": "3.2.1"
+  },
+  "samples": []
+}

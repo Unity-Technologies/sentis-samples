@@ -1,0 +1,75 @@
+using System;
+using System.IO;
+using Unity.AppUI.Redux;
+using Unity.AppUI.UI;
+using UnityEditor;
+using UnityEngine;
+using UnityEngine.UIElements;
+using TextField = Unity.AppUI.UI.TextField;
+
+namespace Unity.InferenceEngine.Samples.Chat
+{
+    class InputHandler
+    {
+        ChatStoreManager m_StoreManager;
+        TextField m_InputField;
+        IconButton m_SendButton;
+        IconButton m_AttachButton;
+
+        Texture2D m_AttachedImage;
+
+        public InputHandler(ChatStoreManager storeManager, ChatWindow ctxWindow)
+        {
+            m_StoreManager = storeManager;
+            m_StoreManager.Store.Subscribe(ChatSlice.Name, (ChatState state) => OnStoreUpdate(state));
+
+            m_InputField = ctxWindow.rootVisualElement.Q<TextField>("Input Field");
+
+            m_SendButton = ctxWindow.rootVisualElement.Q<IconButton>("Send Button");
+            m_SendButton.clickable.clicked += OnSendButtonClicked;
+
+            m_AttachButton = ctxWindow.rootVisualElement.Q<IconButton>("Attach Button");
+            m_AttachButton.clickable.clicked += OnAttachButtonClicked;
+
+            var currentState = m_StoreManager.Store.GetState<ChatState>(ChatSlice.Name);
+            OnStoreUpdate(currentState);
+        }
+
+        void OnAttachButtonClicked()
+        {
+            var path = EditorUtility.OpenFilePanel("Select an image", "", "png,jpg,jpeg");
+            var fileData = File.ReadAllBytes(path);
+            var tex = new Texture2D(2, 2);
+            if (tex.LoadImage(fileData))
+            {
+                m_AttachedImage = tex;
+            }
+            else
+            {
+                Debug.LogError("Failed to load image from file.");
+            }
+        }
+
+        void OnStoreUpdate(ChatState state)
+        {
+            var sendEnabled = state.Entries?.Count == 0 || state.Entries[^1]?.Status == ChatEntry.EntryStatus.Completed;
+            m_SendButton.SetEnabled(sendEnabled);
+            m_SendButton.tooltip = sendEnabled ? "Send the message to chat" : "Disabled while processing the last message";
+
+            var attachEnabled = state.Entries?.Count == 0;
+            m_AttachButton.SetEnabled(attachEnabled);
+            m_AttachButton.tooltip = attachEnabled ? "Attach an image to the message" : "Only available when the chat is empty";
+        }
+
+        void OnSendButtonClicked()
+        {
+            var message = m_InputField.value;
+            var user = ChatEntry.Users.User;
+            var newChatEntry = new ChatEntry(user, message, ChatEntry.EntryStatus.Completed, m_AttachedImage);
+
+            m_StoreManager.Store.Dispatch(m_StoreManager.AddChatEntry.Invoke(newChatEntry));
+            m_InputField.value = string.Empty;
+            m_AttachedImage = null;
+        }
+    }
+}
