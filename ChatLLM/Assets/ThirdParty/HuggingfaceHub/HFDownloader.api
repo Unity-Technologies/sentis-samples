@@ -5,7 +5,7 @@ namespace HuggingfaceHub
 {
     public static class HFDownloader
     {
-        public static Microsoft.Extensions.Logging.ILogger Logger { get; set; }
+        public static Utilities.ILogger Logger { get; set; }
         public static System.Threading.Tasks.Task<string> DownloadFileAsync(string repoId, string filename, string subfolder = default(string), string revision = default(string), string cacheDir = default(string), string localDir = default(string), System.Nullable<bool> localDirUseSymlinks = default(System.Nullable<bool>), System.Collections.Generic.IDictionary<string, string> userAgent = default(System.Collections.Generic.IDictionary<string, string>), bool forceDownload = false, string proxy = default(string), int etagTimeout = -1, string token = default(string), bool localFilesOnly = false, bool resumeDownload = false, string endpoint = default(string), System.IProgress<int> progress = default(System.IProgress<int>));
         public static System.Threading.Tasks.Task<string> DownloadSnapshotAsync(string repoId, string revision = default(string), string cacheDir = default(string), string localDir = default(string), System.Nullable<bool> localDirUseSymlinks = default(System.Nullable<bool>), System.Collections.Generic.IDictionary<string, string> userAgent = default(System.Collections.Generic.IDictionary<string, string>), bool forceDownload = false, string proxy = default(string), int etagTimeout = -1, string token = default(string), bool localFilesOnly = false, string[] allowPatterns = default(string[]), string[] ignorePatterns = default(string[]), int maxWorkers = 8, IGroupedProgress progress = default(IGroupedProgress), string endpoint = default(string));
         public static System.Threading.Tasks.Task<Common.HfFileMetadata> GetHfFileMetadata(System.Uri uri, string token = default(string), string proxy = default(string), int timeout = -1, System.Collections.Generic.IDictionary<string, string> userAgent = default(System.Collections.Generic.IDictionary<string, string>));
@@ -96,5 +96,64 @@ namespace HuggingfaceHub.Common
         [Newtonsoft.Json.JsonProperty(@"lfs")] public BlobLfsInfo Lfs { get; set; }
         [Newtonsoft.Json.JsonProperty(@"size")] public int Size { get; set; }
         public RepoSibling() {}
+    }
+}
+
+namespace HuggingfaceHub.Utilities
+{
+    public class HttpEncoder
+    {
+        public static HttpEncoder Current { get; set; }
+        public static HttpEncoder Default { get; }
+        public HttpEncoder() {}
+        protected virtual void HeaderNameValueEncode(string headerName, string headerValue, out string encodedHeaderName, out string encodedHeaderValue);
+        protected virtual void HtmlAttributeEncode(string value, System.IO.TextWriter output);
+        protected virtual void HtmlDecode(string value, System.IO.TextWriter output);
+        protected virtual void HtmlEncode(string value, System.IO.TextWriter output);
+        protected virtual byte[] UrlEncode(byte[] bytes, int offset, int count);
+        protected virtual string UrlPathEncode(string value);
+    }
+
+    public static class HttpUtility
+    {
+        public static string HtmlAttributeEncode(string s);
+        public static void HtmlAttributeEncode(string s, System.IO.TextWriter output);
+        public static string HtmlDecode(string s);
+        public static void HtmlDecode(string s, System.IO.TextWriter output);
+        public static string HtmlEncode(object value);
+        public static string HtmlEncode(string s);
+        public static void HtmlEncode(string s, System.IO.TextWriter output);
+        public static string JavaScriptStringEncode(string value);
+        public static string JavaScriptStringEncode(string value, bool addDoubleQuotes);
+        public static System.Collections.Specialized.NameValueCollection ParseQueryString(string query);
+        public static System.Collections.Specialized.NameValueCollection ParseQueryString(string query, System.Text.Encoding encoding);
+        public static string UrlDecode(string str);
+        public static string UrlDecode(byte[] bytes, System.Text.Encoding e);
+        public static string UrlDecode(string s, System.Text.Encoding e);
+        public static string UrlDecode(byte[] bytes, int offset, int count, System.Text.Encoding e);
+        public static byte[] UrlDecodeToBytes(byte[] bytes);
+        public static byte[] UrlDecodeToBytes(string str);
+        public static byte[] UrlDecodeToBytes(string str, System.Text.Encoding e);
+        public static byte[] UrlDecodeToBytes(byte[] bytes, int offset, int count);
+        public static string UrlEncode(byte[] bytes);
+        public static string UrlEncode(string str);
+        public static string UrlEncode(string s, System.Text.Encoding Enc);
+        public static string UrlEncode(byte[] bytes, int offset, int count);
+        public static byte[] UrlEncodeToBytes(byte[] bytes);
+        public static byte[] UrlEncodeToBytes(string str);
+        public static byte[] UrlEncodeToBytes(string str, System.Text.Encoding e);
+        public static byte[] UrlEncodeToBytes(byte[] bytes, int offset, int count);
+        public static string UrlEncodeUnicode(string str);
+        public static byte[] UrlEncodeUnicodeToBytes(string str);
+        public static string UrlPathEncode(string s);
+    }
+
+    public interface ILogger
+    {
+        public void LogDebug(string message);
+        public void LogError(string message);
+        public void LogException(System.Exception ex);
+        public void LogInformation(string message);
+        public void LogWarning(string message);
     }
 }

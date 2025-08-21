@@ -9,10 +9,7 @@
     "allowUnsafeCode": false,
     "overrideReferences": true,
     "precompiledReferences": [
-        "Newtonsoft.Json.dll",
-        "Microsoft.Extensions.Logging.Abstractions.dll",
-        "unityplastic.dll",
-        "Microsoft.Extensions.DependencyInjection.Abstractions.dll"
+        "Newtonsoft.Json.dll"
     ],
     "autoReferenced": true,
     "defineConstraints": [],

@@ -4,7 +4,6 @@ using System.Diagnostics;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using HuggingfaceHub.Common;
-using Microsoft.Extensions.Logging;
 using System.IO;
 using System.Linq;
 using System.Net.Http;

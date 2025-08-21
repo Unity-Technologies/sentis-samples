@@ -4,8 +4,8 @@ using System.Net.Http;
 using System.Web;
 using System.Collections.Specialized;
 using System.Threading.Tasks;
-using Codice.Utils;
 using HuggingfaceHub.Common;
+using HuggingfaceHub.Utilities;
 using Newtonsoft.Json;
 
 namespace HuggingfaceHub
@@ -29,7 +29,7 @@ namespace HuggingfaceHub
         /// </param>
         /// <param name="endpoint">The endpoint to use for the request. Defaults to the global endpoint.</param>
         /// <returns></returns>
-        public static async Task<ModelInfo> GetModelInfoAsync(string repoId, string revision = "main", int? timeout = null, 
+        public static async Task<ModelInfo> GetModelInfoAsync(string repoId, string revision = "main", int? timeout = null,
             bool securityStatus = false, bool filesMetadata = false, string? token = null, string? endpoint = null)
         {
             endpoint ??= HFGlobalConfig.EndPoint;
@@ -45,7 +45,7 @@ namespace HuggingfaceHub
                 queryString["blobs"] = true.ToString();
             }
             baseUri.Query = queryString.ToString();
-            
+
             using(var request = new HttpRequestMessage(HttpMethod.Get, baseUri.Uri)){
                 foreach(var key in header.Keys){
                     request.Headers.TryAddWithoutValidation(key, header[key]);
@@ -53,7 +53,7 @@ namespace HuggingfaceHub
                 var response = await HttpClient.SendAsync(request);
                 if(response.StatusCode != HttpStatusCode.OK)
                 {
-                    throw new HttpRequestException($"Failed to get model info: {response.StatusCode}. " +  
+                    throw new HttpRequestException($"Failed to get model info: {response.StatusCode}. " +
                     "Please check your input first, then try to use a mirror site.");
                 }
                 var content = await response.Content.ReadAsStringAsync();

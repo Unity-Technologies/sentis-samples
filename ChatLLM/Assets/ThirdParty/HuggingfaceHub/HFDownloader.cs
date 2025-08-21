@@ -4,7 +4,7 @@ using System.Linq;
 using System.Net;
 using System.Net.Http;
 using System.Text.RegularExpressions;
-using Microsoft.Extensions.Logging;
+using HuggingfaceHub.Utilities;
 
 namespace HuggingfaceHub
 {
@@ -39,7 +39,7 @@ namespace HuggingfaceHub
 
         /// <summary>
         /// Build headers dictionary to send in a HF Hub call.
-        /// 
+        ///
         /// By default, authorization token is always provided either from argument (explicit
         /// use) or retrieved from the cache (implicit use). To explicitly avoid sending the
         /// token to the Hub, set `token=False`.
@@ -80,7 +80,7 @@ namespace HuggingfaceHub
             return token;
         }
 
-        private static void ValidateTokenToSend(string token, bool isWriteAction) { 
+        private static void ValidateTokenToSend(string token, bool isWriteAction) {
             if(isWriteAction){
                 if(token.StartsWith("api_org")){
                     throw new ArgumentException("You must use your personal account token for write-access methods. To " +
