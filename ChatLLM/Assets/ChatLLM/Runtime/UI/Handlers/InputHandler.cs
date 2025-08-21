@@ -37,6 +37,7 @@ namespace Unity.InferenceEngine.Samples.Chat
 
         void OnAttachButtonClicked()
         {
+            #if UNITY_EDITOR
             var path = EditorUtility.OpenFilePanel("Select an image", "", "png,jpg,jpeg");
             var fileData = File.ReadAllBytes(path);
             var tex = new Texture2D(2, 2);
@@ -48,6 +49,7 @@ namespace Unity.InferenceEngine.Samples.Chat
             {
                 Debug.LogError("Failed to load image from file.");
             }
+            #endif
         }
 
         void OnStoreUpdate(ChatState state)
