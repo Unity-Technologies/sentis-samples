@@ -1,0 +1,21 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: eb967f5a24a54604901b45e4e09c426d, type: 3}
+  m_Name: App UI Settings
+  m_EditorClassIdentifier: Unity.AppUI::Unity.AppUI.Core.AppUISettings
+  m_AutoCorrectUiScale: 1
+  m_UseCustomEditorUpdateFrequency: 0
+  m_EditorUpdateFrequency: 60
+  m_AutoOverrideAndroidManifest: 1
+  m_EnableMacOSGestureRecognition: 1
+  m_IncludeShadersInPlayerBuild: 1
+  m_EditorOnly: 0
