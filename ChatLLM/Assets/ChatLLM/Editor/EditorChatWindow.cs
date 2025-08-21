@@ -7,15 +7,10 @@ using UnityEngine.UIElements;
 
 namespace Unity.InferenceEngine.Samples.Chat
 {
-    sealed class ChatWindow : EditorWindow, IDisposable
+    sealed class EditorChatWindow : EditorWindow
     {
         const string k_VisualTreePath = "UI/ChatWindow";
-
-        InputHandler m_InputHandler;
-        HistoryHandler m_HistoryHandler;
-        AssistantHandler m_AssistantHandler;
-
-        ChatStoreManager m_StoreManager;
+        ChatWindow m_ChatWindow;
 
         public void CreateGUI()
         {
@@ -25,6 +20,7 @@ namespace Unity.InferenceEngine.Samples.Chat
             if (visualTree != null)
             {
                 visualTree.CloneTree(rootVisualElement);
+                m_ChatWindow = rootVisualElement.Q<ChatWindow>();
             }
             else
             {
@@ -32,23 +28,17 @@ namespace Unity.InferenceEngine.Samples.Chat
             }
 
             titleContent = new GUIContent("Chat");
-
-            m_StoreManager ??= new ChatStoreManager();
-
-            m_InputHandler = new InputHandler(m_StoreManager, this);
-            m_HistoryHandler = new HistoryHandler(m_StoreManager, this);
-            m_AssistantHandler = new AssistantHandler(m_StoreManager);
         }
 
         void OnDestroy()
         {
-            Dispose();
+            m_ChatWindow?.Dispose();
         }
 
         [MenuItem("Inference Engine/Sample/Chat/Start Chat")]
         public static void OpenWindow()
         {
-            var window = GetWindow<ChatWindow>();
+            var window = GetWindow<EditorChatWindow>();
             window.titleContent = new GUIContent("Chat");
             window.minSize = new Vector2(300, 400);
             window.Show();
@@ -71,12 +61,6 @@ namespace Unity.InferenceEngine.Samples.Chat
         public static bool DownloadModelsValidate()
         {
             return !ModelDownloader.VerifyModelsExist();
-        }
-
-        public void Dispose()
-        {
-            m_AssistantHandler?.Dispose();
-            m_StoreManager?.Dispose();
         }
     }
 }

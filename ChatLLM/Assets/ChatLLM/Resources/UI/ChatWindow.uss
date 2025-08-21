@@ -1,3 +1,6 @@
+.chat-window {
+    flex-grow: 1;
+}
 .chat-history {
     padding-top: var(--appui-spacing-200);
     padding-right: var(--appui-spacing-200);

@@ -18,7 +18,7 @@ namespace Unity.InferenceEngine.Samples.Chat
             m_StoreManager = storeManager;
             m_StoreManager.Store.Subscribe(ChatSlice.Name, (ChatState state) => OnStoreUpdate(state));
 
-            m_HistoryListView = ctxWindow.rootVisualElement.Q<ScrollView>("Chat History");
+            m_HistoryListView = ctxWindow.Q<ScrollView>("Chat History");
 
             var currentState = m_StoreManager.Store.GetState<ChatState>(ChatSlice.Name);
             OnStoreUpdate(currentState);

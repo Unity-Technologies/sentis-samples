@@ -23,12 +23,12 @@ namespace Unity.InferenceEngine.Samples.Chat
             m_StoreManager = storeManager;
             m_StoreManager.Store.Subscribe(ChatSlice.Name, (ChatState state) => OnStoreUpdate(state));
 
-            m_InputField = ctxWindow.rootVisualElement.Q<TextField>("Input Field");
+            m_InputField = ctxWindow.Q<TextField>("Input Field");
 
-            m_SendButton = ctxWindow.rootVisualElement.Q<IconButton>("Send Button");
+            m_SendButton = ctxWindow.Q<IconButton>("Send Button");
             m_SendButton.clickable.clicked += OnSendButtonClicked;
 
-            m_AttachButton = ctxWindow.rootVisualElement.Q<IconButton>("Attach Button");
+            m_AttachButton = ctxWindow.Q<IconButton>("Attach Button");
             m_AttachButton.clickable.clicked += OnAttachButtonClicked;
 
             var currentState = m_StoreManager.Store.GetState<ChatState>(ChatSlice.Name);
