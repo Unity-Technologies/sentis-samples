@@ -1,8 +1,10 @@
 using System;
 using Unity.AppUI.Redux;
+using UnityEngine;
 
 namespace Unity.InferenceEngine.Samples.Chat
 {
+    [Serializable]
     sealed class ChatStoreManager : IDisposable
     {
         public IStore<PartitionedState> Store;
