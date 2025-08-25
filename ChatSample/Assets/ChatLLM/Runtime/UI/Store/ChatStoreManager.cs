@@ -10,6 +10,7 @@ namespace Unity.InferenceEngine.Samples.Chat
         public IStore<PartitionedState> Store;
         public ActionCreator<ChatEntry> AddChatEntry = new(ChatSlice.AddChatEntry);
         public ActionCreator<ChatEntry> UpdateChatEntry = new(ChatSlice.UpdateChatEntry);
+        public ActionCreator<string> SetAttachment = new(ChatSlice.SetAttachment);
 
         public ChatStoreManager()
         {
@@ -22,6 +23,7 @@ namespace Unity.InferenceEngine.Samples.Chat
                 {
                     builder.AddCase(AddChatEntry, ChatReducers.AddChatEntry);
                     builder.AddCase(UpdateChatEntry, ChatReducers.UpdateChatEntry);
+                    builder.AddCase(SetAttachment, ChatReducers.SetAttachment);
                 });
 
             Store = StoreFactory.CreateStore(new[] { slice });

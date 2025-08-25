@@ -15,8 +15,7 @@ namespace Unity.InferenceEngine.Samples.Chat
         TextField m_InputField;
         IconButton m_SendButton;
         IconButton m_AttachButton;
-
-        Texture2D m_AttachedImage;
+        VisualElement m_AttachmentContainer;
 
         public InputHandler(ChatStoreManager storeManager, ChatWindow ctxWindow)
         {
@@ -31,6 +30,8 @@ namespace Unity.InferenceEngine.Samples.Chat
             m_AttachButton = ctxWindow.Q<IconButton>("Attach Button");
             m_AttachButton.clickable.clicked += OnAttachButtonClicked;
 
+            m_AttachmentContainer = ctxWindow.Q<VisualElement>("Attachment Container");
+
             var currentState = m_StoreManager.Store.GetState<ChatState>(ChatSlice.Name);
             OnStoreUpdate(currentState);
         }
@@ -39,16 +40,7 @@ namespace Unity.InferenceEngine.Samples.Chat
         {
             #if UNITY_EDITOR
             var path = EditorUtility.OpenFilePanel("Select an image", "", "png,jpg,jpeg");
-            var fileData = File.ReadAllBytes(path);
-            var tex = new Texture2D(2, 2);
-            if (tex.LoadImage(fileData))
-            {
-                m_AttachedImage = tex;
-            }
-            else
-            {
-                Debug.LogError("Failed to load image from file.");
-            }
+            m_StoreManager.Store.Dispatch(m_StoreManager.SetAttachment.Invoke(path));
             #endif
         }
 
@@ -58,20 +50,45 @@ namespace Unity.InferenceEngine.Samples.Chat
             m_SendButton.SetEnabled(sendEnabled);
             m_SendButton.tooltip = sendEnabled ? "Send the message to chat" : "Disabled while processing the last message";
 
-            var attachEnabled = state.Entries?.Count == 0;
+            var attachEnabled = state.Entries?.Count == 0 && string.IsNullOrEmpty(state.AttachmentPath);
             m_AttachButton.SetEnabled(attachEnabled);
-            m_AttachButton.tooltip = attachEnabled ? "Attach an image to the message" : "Only available when the chat is empty";
+            m_AttachButton.tooltip = attachEnabled ? "Attach an image to the message" : "Only available when the chat is empty and no image is attached";
+
+            if (!string.IsNullOrEmpty(state.AttachmentPath))
+            {
+                m_AttachmentContainer.Add(new AttachmentElement(m_StoreManager));
+            }
+            else
+            {
+                m_AttachmentContainer.Clear();
+            }
         }
 
         void OnSendButtonClicked()
         {
+            var currentState = m_StoreManager.Store.GetState<ChatState>(ChatSlice.Name);
+
+            var attachedImage = LoadImage(currentState.AttachmentPath);
             var message = m_InputField.value;
             var user = ChatEntry.Users.User;
-            var newChatEntry = new ChatEntry(user, message, ChatEntry.EntryStatus.Completed, m_AttachedImage);
+            var newChatEntry = new ChatEntry(user, message, ChatEntry.EntryStatus.Completed, attachedImage);
 
             m_StoreManager.Store.Dispatch(m_StoreManager.AddChatEntry.Invoke(newChatEntry));
+            m_StoreManager.Store.Dispatch(m_StoreManager.SetAttachment.Invoke(null));
             m_InputField.value = string.Empty;
-            m_AttachedImage = null;
+        }
+
+        Texture2D LoadImage(string path)
+        {
+            var fileData = File.ReadAllBytes(path);
+            var tex = new Texture2D(2, 2);
+            if (tex.LoadImage(fileData))
+            {
+                return tex;
+            }
+
+            Debug.LogError("Failed to load image from file.");
+            return null;
         }
     }
 }

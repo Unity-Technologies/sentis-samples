@@ -24,5 +24,11 @@ namespace Unity.InferenceEngine.Samples.Chat
 
             return newState;
         }
+
+        public static ChatState SetAttachment(ChatState state, IAction<string> attachmentPath)
+        {
+            var newState = state with { AttachmentPath = attachmentPath.payload };
+            return newState;
+        }
     }
 }

@@ -7,5 +7,6 @@ namespace Unity.InferenceEngine.Samples.Chat
         public const string Name = "ChatSlice";
         public const string AddChatEntry = Name + "/AddChatEntry";
         public const string UpdateChatEntry = Name + "/UpdateChatEntry";
+        public const string SetAttachment = Name + "/SetAttachment";
     }
 }

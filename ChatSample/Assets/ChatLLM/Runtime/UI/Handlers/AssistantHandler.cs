@@ -20,7 +20,7 @@ namespace Unity.InferenceEngine.Samples.Chat
 
         void OnStoreUpdate(ChatState state)
         {
-            if (state.Entries[^1].User != ChatEntry.Users.User)
+            if (state?.Entries.Count == 0 || state?.Entries[^1].User != ChatEntry.Users.User)
                 return;
 
             var newEntry = new ChatEntry(ChatEntry.Users.Assistant, string.Empty, ChatEntry.EntryStatus.Pending);

@@ -1,5 +1,6 @@
 .chat-window {
     flex-grow: 1;
+    background-color: var(--appui-backgrounds-50);
 }
 
 .chat-history {
@@ -71,4 +72,21 @@
 .chat-entry-attachment {
     max-width: 200px;
     max-height: 200px;
+}
+
+.input-container {
+    padding-top: var(--appui-spacing-100);
+    background-color: var(--appui-backgrounds-100);
+    flex-shrink: 0;
+}
+
+.attachment-element{
+    align-content: center;
+    align-self: center;
+    align-items: center;
+    border-radius: var(--appui-border-radius-md);
+    background-color: var(--appui-backgrounds-200);
+    flex-direction: row;
+    padding-left: var(--appui-spacing-100);
+    padding-right: var(--appui-spacing-100);
 }
