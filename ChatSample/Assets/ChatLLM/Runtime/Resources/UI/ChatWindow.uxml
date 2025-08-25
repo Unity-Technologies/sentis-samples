@@ -17,7 +17,8 @@
                 </ui:VisualElement>
                 <ui:VisualElement name="Chat Input" class="chat-input">
                     <appui:IconButton name="Attach Button" class="attach-button" quiet="true" icon="link"/>
-                    <appui:TextField name="Input Field" class="input-field" multiline="true" placeholder="Send a message"/>
+                    <appui:TextField name="Input Field" class="input-field" multiline="true"
+                                     placeholder="Send a message"/>
                     <appui:IconButton name="Send Button" class="send-button" quiet="true" icon="play"/>
                 </ui:VisualElement>
             </ui:VisualElement>

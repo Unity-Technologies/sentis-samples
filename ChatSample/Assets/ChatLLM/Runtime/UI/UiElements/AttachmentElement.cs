@@ -1,6 +1,8 @@
+using System;
+using System.IO;
+using Unity.AppUI.Redux;
 using Unity.AppUI.UI;
 using UnityEngine.UIElements;
-using Unity.AppUI.Redux;
 
 namespace Unity.InferenceEngine.Samples.Chat
 {
@@ -23,7 +25,7 @@ namespace Unity.InferenceEngine.Samples.Chat
 
             var fileNameLabel = new Label
             {
-                text = System.IO.Path.GetFileName(chatState.AttachmentPath)
+                text = Path.GetFileName(chatState.AttachmentPath)
             };
             Add(fileNameLabel);
 

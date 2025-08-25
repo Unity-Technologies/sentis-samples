@@ -80,7 +80,7 @@
     flex-shrink: 0;
 }
 
-.attachment-element{
+.attachment-element {
     align-content: center;
     align-self: center;
     align-items: center;
