@@ -21,8 +21,7 @@ We use this to create a seamless conversational AI experience.
 - **Real-time Inference**: Fast GPU-accelerated inference using Unity's Inference Engine
 - **Editor Integration**: Available as an Editor window for development and testing
 - **Streaming Responses**: Token-by-token response generation for responsive interaction
-- **Model Management**: Automatic model downloading and validation
-
+- **Model Management**: HuggingFace model downloading
 ## Getting Started
 
 1. Open the Unity project
@@ -43,7 +42,7 @@ The chat interface supports:
 
 The sample demonstrates:
 - Integration of multimodal LLM models in Unity
-- Asynchronous model inference and streaming
+- Asynchronous model inference
 - UI Toolkit for modern editor interfaces
 - State management using Redux patterns
 - Model scheduling and resource management
