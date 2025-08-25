@@ -5,7 +5,7 @@ using NUnit.Framework;
 using UnityEditor;
 using UnityEngine;
 
-namespace Unity.InferenceEngine.Samples.Chat
+namespace Unity.InferenceEngine.Samples.Chat.Editor
 {
     class LlavaDecoderTest
     {

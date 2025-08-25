@@ -1,11 +1,10 @@
 using System;
 using System.Threading.Tasks;
-using Unity.InferenceEngine.Samples.Chat.LLM_Chat.Network;
 using UnityEditor;
 using UnityEngine;
 using UnityEngine.UIElements;
 
-namespace Unity.InferenceEngine.Samples.Chat
+namespace Unity.InferenceEngine.Samples.Chat.Editor
 {
     sealed class EditorChatWindow : EditorWindow
     {

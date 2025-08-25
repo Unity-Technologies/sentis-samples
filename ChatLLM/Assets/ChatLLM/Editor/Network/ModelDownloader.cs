@@ -5,7 +5,7 @@ using HuggingfaceHub;
 using UnityEditor;
 using UnityEngine;
 
-namespace Unity.InferenceEngine.Samples.Chat.LLM_Chat.Network
+namespace Unity.InferenceEngine.Samples.Chat.Editor
 {
     public class ModelDownloader
     {

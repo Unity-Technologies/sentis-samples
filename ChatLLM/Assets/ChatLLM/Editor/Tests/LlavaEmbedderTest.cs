@@ -3,7 +3,7 @@ using System.Threading.Tasks;
 using NUnit.Framework;
 using UnityEngine;
 
-namespace Unity.InferenceEngine.Samples.Chat
+namespace Unity.InferenceEngine.Samples.Chat.Editor
 {
     class LlavaEmbedderTest
     {

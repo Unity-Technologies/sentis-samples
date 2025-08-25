@@ -5,7 +5,7 @@ using NUnit.Framework;
 using UnityEngine;
 using Object = UnityEngine.Object;
 
-namespace Unity.InferenceEngine.Samples.Chat
+namespace Unity.InferenceEngine.Samples.Chat.Editor
 {
     class LlavaVisionEncoderTest
     {
