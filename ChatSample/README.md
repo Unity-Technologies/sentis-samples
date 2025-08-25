@@ -30,9 +30,9 @@ We use this to create a seamless conversational AI experience.
 3. Navigate to **Inference Engine > Sample > Chat > Start Chat** in the menu
 4. Start chatting with the AI assistant!
 
-Alternatively, you can manually download the models from [https://huggingface.co/llava-hf/llava-onevision-qwen2-0.5b-si-hf](https://huggingface.co/llava-hf/llava-onevision-qwen2-0.5b-si-hf) and place them in `ChatLLM/Assets/ChatLLM/Resources/Models/`.
+Alternatively, you can manually download the models from [https://huggingface.co/llava-hf/llava-onevision-qwen2-0.5b-si-hf](https://huggingface.co/llava-hf/llava-onevision-qwen2-0.5b-si-hf) and place them in `ChatSample/Assets/ChatLLM/Resources/Models/`.
 
-You can also use the runtime scene at `ChatLLM/Assets/ChatLLM/Runtime/Scenes/Chat.unity`, but make sure to download the models beforehand using the editor menu.
+You can also use the runtime scene at `ChatSample/Assets/ChatLLM/Runtime/Scenes/Chat.unity`, but make sure to download the models beforehand using the editor menu.
 
 The chat interface supports:
 - Text-only conversations
