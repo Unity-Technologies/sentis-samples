@@ -73,7 +73,7 @@ namespace Unity.InferenceEngine.Samples.Chat.Editor
 
         public static bool VerifyModelsExist()
         {
-            var basePath = Application.dataPath + "/ChatLLM/Runtime/Resources/";
+            var basePath = Application.dataPath + "/ChatLLM/Resources/";
             return File.Exists(basePath + LlavaConfig.DecoderModelPath + ".onnx") &&
                    File.Exists(basePath + LlavaConfig.VisionEncoderModelPath + ".onnx") &&
                    File.Exists(basePath + LlavaConfig.EmbeddingModelPath + ".onnx") &&
