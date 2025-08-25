@@ -80,6 +80,9 @@ namespace Unity.InferenceEngine.Samples.Chat
 
         Texture2D LoadImage(string path)
         {
+            if (string.IsNullOrEmpty(path) || !File.Exists(path))
+                return null;
+
             var fileData = File.ReadAllBytes(path);
             var tex = new Texture2D(2, 2);
             if (tex.LoadImage(fileData))

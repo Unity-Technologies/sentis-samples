@@ -84,6 +84,9 @@ namespace Unity.InferenceEngine.Samples.Chat
 
         static string FormatMessage(string message)
         {
+            if(message == null)
+                return string.Empty;
+
             return message.StartsWith("\n") ? message[1..] : message;
         }
     }
