@@ -13,15 +13,20 @@ namespace Unity.InferenceEngine.Samples.Chat.Editor
         readonly string m_ModelsPath = Application.dataPath + "/ChatLLM/Resources/Models";
         readonly Dictionary<string, int> m_LastLoggedProgress = new();
 
+        static readonly (string fileName, string remotePath, string localPath)[] k_ModelFiles = {
+            (LlavaConfig.DecoderModelFile, $"onnx/{LlavaConfig.DecoderModelFile}", LlavaConfig.DecoderModelPath + ".onnx"),
+            (LlavaConfig.VisionEncoderModelFile, $"onnx/{LlavaConfig.VisionEncoderModelFile}", LlavaConfig.VisionEncoderModelPath + ".onnx"),
+            (LlavaConfig.EmbeddingModelFile, $"onnx/{LlavaConfig.EmbeddingModelFile}", LlavaConfig.EmbeddingModelPath + ".onnx"),
+            (LlavaConfig.TokenizerModelFile, LlavaConfig.TokenizerModelFile, LlavaConfig.TokenizerConfigPath + ".json")
+        };
+
         public async Task DownloadModels()
         {
-            var downloadTasks = new List<Task<string>>
+            var downloadTasks = new List<Task<string>>();
+            foreach (var (fileName, remotePath, _) in k_ModelFiles)
             {
-                CreateDownloadTask(LlavaConfig.DecoderModelFile, $"onnx/{LlavaConfig.DecoderModelFile}"),
-                CreateDownloadTask(LlavaConfig.VisionEncoderModelFile, $"onnx/{LlavaConfig.VisionEncoderModelFile}"),
-                CreateDownloadTask(LlavaConfig.EmbeddingModelFile, $"onnx/{LlavaConfig.EmbeddingModelFile}"),
-                CreateDownloadTask(LlavaConfig.TokenizerModelFile, LlavaConfig.TokenizerModelFile)
-            };
+                downloadTasks.Add(CreateDownloadTask(fileName, remotePath));
+            }
 
             try
             {
@@ -74,10 +79,12 @@ namespace Unity.InferenceEngine.Samples.Chat.Editor
         public static bool VerifyModelsExist()
         {
             var basePath = Application.dataPath + "/ChatLLM/Resources/";
-            return File.Exists(basePath + LlavaConfig.DecoderModelPath + ".onnx") &&
-                   File.Exists(basePath + LlavaConfig.VisionEncoderModelPath + ".onnx") &&
-                   File.Exists(basePath + LlavaConfig.EmbeddingModelPath + ".onnx") &&
-                   File.Exists(basePath + LlavaConfig.TokenizerConfigPath + ".json");
+            foreach (var (_, _, localPath) in k_ModelFiles)
+            {
+                if (!File.Exists(basePath + localPath))
+                    return false;
+            }
+            return true;
         }
     }
 }
