@@ -74,7 +74,7 @@ namespace Unity.InferenceEngine.Samples.Chat.Editor
             m_LastLoggedProgress.TryAdd(file, -5);
 
             var lastProgress = m_LastLoggedProgress[file];
-            if (progress - lastProgress >= 5 || progress == 100)
+            if (progress - lastProgress >= 5)
             {
                 m_LastLoggedProgress[file] = progress;
                 Debug.Log($"Downloading {file}: {progress}% complete.");
