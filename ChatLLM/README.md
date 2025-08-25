@@ -4,18 +4,6 @@ Interactive chat interface powered by the LLaVA OneVision multimodal model runni
 
 ![Chat Interface](Documentation/main.png)
 
-## Gameplay Idea
-
-We want to create an interactive chat experience where users can have conversations with a vision-language model that can understand both text and images.
-
-The chat interface allows users to:
-- Send text messages to the AI assistant
-- Upload and share images for the model to analyze
-- Receive intelligent responses that understand visual content
-- Maintain conversation history for context
-
-![Chat Interaction](Documentation/gameplay.png)
-
 ## Runtime Inference
 
 To power this experience we leverage the LLaVA OneVision model, a multimodal large language model.
@@ -26,8 +14,6 @@ The system processes both text and image inputs:
 - The decoder generates contextual responses based on both modalities
 
 We use this to create a seamless conversational AI experience.
-
-![Runtime Architecture](Documentation/runtime-inference.png)
 
 ## Features
 
@@ -40,9 +26,13 @@ We use this to create a seamless conversational AI experience.
 ## Getting Started
 
 1. Open the Unity project
-2. Navigate to **Inference Engine > Sample > Chat > Start Chat** in the menu
-3. Wait for models to download if running for the first time
+2. Download models by navigating to **Inference Engine > Sample > Chat > Download Models** in the menu
+3. Navigate to **Inference Engine > Sample > Chat > Start Chat** in the menu
 4. Start chatting with the AI assistant!
+
+Alternatively, you can manually download the models from [https://huggingface.co/llava-hf/llava-onevision-qwen2-0.5b-si-hf](https://huggingface.co/llava-hf/llava-onevision-qwen2-0.5b-si-hf) and place them in `ChatLLM/Assets/ChatLLM/Resources/Models/`.
+
+You can also use the runtime scene at `ChatLLM/Assets/ChatLLM/Runtime/Scenes/Chat.unity`, but make sure to download the models beforehand using the editor menu.
 
 The chat interface supports:
 - Text-only conversations
