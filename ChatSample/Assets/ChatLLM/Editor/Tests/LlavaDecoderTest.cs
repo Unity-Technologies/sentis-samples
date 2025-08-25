@@ -17,7 +17,7 @@ namespace Unity.InferenceEngine.Samples.Chat.Editor
             using var visionEncoder = new LlavaVisionEncoder(config);
             using var decoder = new LlavaDecoder(config);
 
-            var testTexture = AssetDatabase.LoadAssetAtPath<Texture2D>("Assets/LLM Chat/Tests/Test-Image.png");
+            var testTexture = AssetDatabase.LoadAssetAtPath<Texture2D>("Assets/ChatLLM/Editor/Tests/Test-Image.png");
 
             var prompt = "You are a labeling tool. Only provide descriptions. Here is a Texture2D asset. Describe its content.";
             var chatTemplatePrompt = LlavaConfig.ApplyChatTemplate(prompt);
