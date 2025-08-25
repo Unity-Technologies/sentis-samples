@@ -23,8 +23,13 @@ namespace Unity.InferenceEngine.Samples.Chat.Editor
         public async Task DownloadModels()
         {
             var downloadTasks = new List<Task<string>>();
-            foreach (var (fileName, remotePath, _) in k_ModelFiles)
+            foreach (var (fileName, remotePath, localPath) in k_ModelFiles)
             {
+                if (VerifyModelExist(localPath))
+                {
+                    Debug.Log($"{fileName} already exists at {localPath}, skipping download.");
+                    continue;
+                }
                 downloadTasks.Add(CreateDownloadTask(fileName, remotePath));
             }
 
@@ -78,13 +83,18 @@ namespace Unity.InferenceEngine.Samples.Chat.Editor
 
         public static bool VerifyModelsExist()
         {
-            var basePath = Application.dataPath + "/ChatLLM/Resources/";
             foreach (var (_, _, localPath) in k_ModelFiles)
             {
-                if (!File.Exists(basePath + localPath))
+                if (!VerifyModelExist(localPath))
                     return false;
             }
             return true;
+        }
+
+        public static bool VerifyModelExist(string localPath)
+        {
+            var basePath = Application.dataPath + "/ChatLLM/Resources/";
+            return File.Exists(basePath + localPath);
         }
     }
 }
