@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Threading.Tasks;
 using HuggingfaceHub;
 using UnityEditor;
@@ -34,9 +35,9 @@ namespace Unity.InferenceEngine.Samples.Chat.Editor
             finally
             {
                 var cacheDir = HFGlobalConfig.DefaultCacheDir;
-                if (System.IO.Directory.Exists(cacheDir))
+                if (Directory.Exists(cacheDir))
                 {
-                    System.IO.Directory.Delete(cacheDir, true);
+                    Directory.Delete(cacheDir, true);
                     Debug.Log($"Deleted cache directory: {cacheDir}");
                 }
 
@@ -46,7 +47,7 @@ namespace Unity.InferenceEngine.Samples.Chat.Editor
 
         Task<string> CreateDownloadTask(string fileName, string remotePath)
         {
-            var progress = new Progress<int>((p) => LogProgress(fileName, p));
+            var progress = new Progress<int>(p => LogProgress(fileName, p));
 
             return Task.Run(() =>
                 HFDownloader.DownloadFileAsync(
@@ -73,10 +74,10 @@ namespace Unity.InferenceEngine.Samples.Chat.Editor
         public static bool VerifyModelsExist()
         {
             var basePath = Application.dataPath + "/ChatLLM/Runtime/Resources/";
-            return System.IO.File.Exists(basePath + LlavaConfig.DecoderModelPath + ".onnx") &&
-                   System.IO.File.Exists(basePath + LlavaConfig.VisionEncoderModelPath + ".onnx") &&
-                   System.IO.File.Exists(basePath + LlavaConfig.EmbeddingModelPath + ".onnx") &&
-                   System.IO.File.Exists(basePath + LlavaConfig.TokenizerConfigPath + ".json");
+            return File.Exists(basePath + LlavaConfig.DecoderModelPath + ".onnx") &&
+                   File.Exists(basePath + LlavaConfig.VisionEncoderModelPath + ".onnx") &&
+                   File.Exists(basePath + LlavaConfig.EmbeddingModelPath + ".onnx") &&
+                   File.Exists(basePath + LlavaConfig.TokenizerConfigPath + ".json");
         }
     }
 }

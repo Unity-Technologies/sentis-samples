@@ -1,20 +1,20 @@
 {
-    "name": "Chat",
-    "rootNamespace": "Unity.InferenceEngine.Samples.Chat",
-    "references": [
-        "GUID:710bb277e6ff49ed91ba164465e106ef",
-        "GUID:2f101f87087d58f4ba92ca00188e763d",
-        "GUID:0f56ff5d9795d4431b39d0095f703b29",
-        "GUID:63a57c8b658089e49a173b0f0c4870a7",
-        "GUID:9e3abae495adb4c5e9e3a5c68f5eb265"
-    ],
-    "includePlatforms": [],
-    "excludePlatforms": [],
-    "allowUnsafeCode": false,
-    "overrideReferences": false,
-    "precompiledReferences": [],
-    "autoReferenced": true,
-    "defineConstraints": [],
-    "versionDefines": [],
-    "noEngineReferences": false
+  "name": "Chat",
+  "rootNamespace": "Unity.InferenceEngine.Samples.Chat",
+  "references": [
+    "GUID:710bb277e6ff49ed91ba164465e106ef",
+    "GUID:2f101f87087d58f4ba92ca00188e763d",
+    "GUID:0f56ff5d9795d4431b39d0095f703b29",
+    "GUID:63a57c8b658089e49a173b0f0c4870a7",
+    "GUID:9e3abae495adb4c5e9e3a5c68f5eb265"
+  ],
+  "includePlatforms": [],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "overrideReferences": false,
+  "precompiledReferences": [],
+  "autoReferenced": true,
+  "defineConstraints": [],
+  "versionDefines": [],
+  "noEngineReferences": false
 }

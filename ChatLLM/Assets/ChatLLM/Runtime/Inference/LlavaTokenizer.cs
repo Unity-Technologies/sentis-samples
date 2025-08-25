@@ -7,7 +7,6 @@ using Unity.ML.Tokenization.Padding;
 using Unity.ML.Tokenization.PostProcessors;
 using Unity.ML.Tokenization.PreTokenizers;
 using Unity.ML.Tokenization.Tokenizers;
-using UnityEditor;
 using UnityEngine;
 
 namespace Unity.InferenceEngine.Samples.Chat
