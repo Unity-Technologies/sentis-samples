@@ -13,15 +13,14 @@ namespace Unity.InferenceEngine.Samples.Chat
         public ChatWindow()
         {
             RegisterCallback<AttachToPanelEvent>(_ => Initialize());
-            RegisterCallback<DetachFromPanelEvent>(_ => Clean());
         }
         void Initialize()
         {
             m_StoreManager ??= new ChatStoreManager();
 
-            m_InputHandler = new InputHandler(m_StoreManager, this);
-            m_HistoryHandler = new HistoryHandler(m_StoreManager, this);
-            m_AssistantHandler = new AssistantHandler(m_StoreManager);
+            m_InputHandler ??= new InputHandler(m_StoreManager, this);
+            m_HistoryHandler ??= new HistoryHandler(m_StoreManager, this);
+            m_AssistantHandler ??= new AssistantHandler(m_StoreManager);
         }
 
         void Clean()
