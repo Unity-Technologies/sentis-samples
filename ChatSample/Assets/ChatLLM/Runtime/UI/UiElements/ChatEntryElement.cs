@@ -44,7 +44,7 @@ namespace Unity.InferenceEngine.Samples.Chat
                 return;
 
             m_AuthorLabel.text = entry.User.ToString();
-            m_MessageLabel.text = entry.Message;
+            m_MessageLabel.text = FormatMessage(entry.Message);
 
             if (entry.User == ChatEntry.Users.User)
             {
@@ -80,6 +80,11 @@ namespace Unity.InferenceEngine.Samples.Chat
             EnableInClassList("user-entry", entry.User == ChatEntry.Users.User);
             EnableInClassList("assistant-entry", entry.User == ChatEntry.Users.Assistant);
             EnableInClassList("system-entry", entry.User == ChatEntry.Users.System);
+        }
+
+        static string FormatMessage(string message)
+        {
+            return message.StartsWith("\n") ? message[1..] : message;
         }
     }
 }
