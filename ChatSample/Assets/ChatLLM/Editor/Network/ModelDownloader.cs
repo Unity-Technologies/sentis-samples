@@ -11,8 +11,7 @@ namespace Unity.InferenceEngine.Samples.Chat.Editor
     public class ModelDownloader
     {
         readonly string m_ModelsPath = Application.dataPath + "/ChatLLM/Resources/Models";
-        readonly Dictionary<string, float> m_LastLoggedProgress = new();
-        HfDownloader m_Downloader;
+        readonly HfDownloader m_Downloader;
 
         static readonly (string fileName, string remotePath, string localPath)[] k_ModelFiles = {
             (LlavaConfig.DecoderModelFile, $"onnx/{LlavaConfig.DecoderModelFile}", LlavaConfig.DecoderModelPath + ".onnx"),
@@ -73,9 +72,9 @@ namespace Unity.InferenceEngine.Samples.Chat.Editor
             );
         }
 
-        void LogProgress(string file, float progress)
+        static void LogProgress(string file, float progress)
         {
-            Debug.Log($"Downloading {file}: {progress}% complete.");
+            Debug.Log($"Downloading {file}: {progress * 10f}% complete.");
         }
 
         public static bool VerifyModelsExist()
@@ -88,7 +87,7 @@ namespace Unity.InferenceEngine.Samples.Chat.Editor
             return true;
         }
 
-        public static bool VerifyModelExist(string localPath)
+        static bool VerifyModelExist(string localPath)
         {
             var basePath = Application.dataPath + "/ChatLLM/Resources/";
             return File.Exists(basePath + localPath);
