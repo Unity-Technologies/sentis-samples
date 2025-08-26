@@ -9,6 +9,7 @@ namespace Unity.InferenceEngine.Samples.Chat.Editor
 {
     public class ModelDownloader
     {
+        static readonly Dictionary<string, int> s_LastLoggedProgress = new Dictionary<string, int>();
         readonly string m_ModelsPath = Application.dataPath + "/ChatLLM/Resources/Models";
         readonly HfDownloader m_Downloader;
 
@@ -66,7 +67,19 @@ namespace Unity.InferenceEngine.Samples.Chat.Editor
 
         static void LogProgress(string file, float progress)
         {
-            Debug.Log($"Downloading {file}: {progress * 10f}% complete.");
+            var percentage = (int)(progress * 100f);
+            var progressIncrement = percentage / 5 * 5;
+            
+            if (!s_LastLoggedProgress.ContainsKey(file))
+            {
+                s_LastLoggedProgress[file] = -1;
+            }
+            
+            if (progressIncrement != s_LastLoggedProgress[file] && progressIncrement % 5 == 0)
+            {
+                s_LastLoggedProgress[file] = progressIncrement;
+                Debug.Log($"Downloading {file}: {progressIncrement}% complete.");
+            }
         }
 
         public static bool VerifyModelsExist()
