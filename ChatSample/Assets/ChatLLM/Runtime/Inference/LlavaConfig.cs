@@ -5,6 +5,7 @@ namespace Unity.InferenceEngine.Samples.Chat
     class LlavaConfig
     {
         public const string ModelId = "llava-hf/llava-onevision-qwen2-0.5b-si-hf";
+        public const string DownloadPath = "/ChatLLM/Resources/Models";
 
         public const string DecoderModelName = "decoder_model_merged";
         public const string DecoderModelFile =  DecoderModelName + ".onnx";

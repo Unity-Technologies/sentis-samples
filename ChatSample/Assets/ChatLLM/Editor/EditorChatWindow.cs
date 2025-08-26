@@ -46,20 +46,22 @@ namespace Unity.InferenceEngine.Samples.Chat.Editor
         [MenuItem("Inference Engine/Sample/Chat/Start Chat", true)]
         public static bool OpenWindowValidate()
         {
-            return ModelDownloader.VerifyModelsExist();
+            return ModelDownloaderWindow.VerifyModelsExist();
         }
 
         [MenuItem("Inference Engine/Sample/Chat/Download Models")]
-        public static async Task DownloadModels()
+        public static void DownloadModels()
         {
-            var modelDownloader = new ModelDownloader();
-            await modelDownloader.DownloadModels();
+            var window = GetWindow<ModelDownloaderEditorWindow>();
+            window.titleContent = new GUIContent("Downloader");
+            window.minSize = new Vector2(300, 400);
+            window.Show();
         }
 
         [MenuItem("Inference Engine/Sample/Chat/Download Models", true)]
         public static bool DownloadModelsValidate()
         {
-            return !ModelDownloader.VerifyModelsExist();
+            return !ModelDownloaderWindow.VerifyModelsExist();
         }
     }
 }

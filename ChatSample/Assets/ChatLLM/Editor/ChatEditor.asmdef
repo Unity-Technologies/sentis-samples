@@ -1,21 +1,21 @@
 {
-  "name": "ChatEditor",
-  "rootNamespace": "Unity.InferenceEngine.Samples.Chat.Editor",
-  "references": [
-    "GUID:064e1175c6dc04c0490dd3baf4d66e38",
-    "GUID:9e3abae495adb4c5e9e3a5c68f5eb265",
-    "GUID:63a57c8b658089e49a173b0f0c4870a7",
-    "GUID:0f56ff5d9795d4431b39d0095f703b29"
-  ],
-  "includePlatforms": [
-    "Editor"
-  ],
-  "excludePlatforms": [],
-  "allowUnsafeCode": false,
-  "overrideReferences": false,
-  "precompiledReferences": [],
-  "autoReferenced": true,
-  "defineConstraints": [],
-  "versionDefines": [],
-  "noEngineReferences": false
+    "name": "ChatEditor",
+    "rootNamespace": "Unity.InferenceEngine.Samples.Chat.Editor",
+    "references": [
+        "GUID:064e1175c6dc04c0490dd3baf4d66e38",
+        "GUID:63a57c8b658089e49a173b0f0c4870a7",
+        "GUID:0f56ff5d9795d4431b39d0095f703b29",
+        "GUID:2f101f87087d58f4ba92ca00188e763d"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
 }

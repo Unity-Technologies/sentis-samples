@@ -14,6 +14,8 @@ namespace Unity.InferenceEngine.Samples.Chat
         readonly string m_DownloadPath;
         readonly SynchronizationContext m_UnityContext;
 
+        public string DownloadPath => m_DownloadPath;
+
         /// <param name="downloadPath">The local path to store the downloaded files</param>
         /// <param name="repoId">The repo id on hf</param>
         /// <param name="revision">The branch name</param>
