@@ -9,7 +9,7 @@ namespace Unity.InferenceEngine.Samples.Chat.Editor
 {
     public class ModelDownloader
     {
-        static readonly Dictionary<string, int> s_LastLoggedProgress = new Dictionary<string, int>();
+        static readonly Dictionary<string, int> k_LastLoggedProgress = new Dictionary<string, int>();
         readonly string m_ModelsPath = Application.dataPath + "/ChatLLM/Resources/Models";
         readonly HfDownloader m_Downloader;
 
@@ -69,15 +69,12 @@ namespace Unity.InferenceEngine.Samples.Chat.Editor
         {
             var percentage = (int)(progress * 100f);
             var progressIncrement = percentage / 5 * 5;
-            
-            if (!s_LastLoggedProgress.ContainsKey(file))
+
+            k_LastLoggedProgress.TryAdd(file, -1);
+
+            if (progressIncrement != k_LastLoggedProgress[file] && progressIncrement % 5 == 0)
             {
-                s_LastLoggedProgress[file] = -1;
-            }
-            
-            if (progressIncrement != s_LastLoggedProgress[file] && progressIncrement % 5 == 0)
-            {
-                s_LastLoggedProgress[file] = progressIncrement;
+                k_LastLoggedProgress[file] = progressIncrement;
                 Debug.Log($"Downloading {file}: {progressIncrement}% complete.");
             }
         }
