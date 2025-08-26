@@ -23,6 +23,7 @@ namespace Unity.InferenceEngine.Samples.Chat
             m_StoreManager.Store.Subscribe(ChatSlice.Name, (ChatState state) => OnStoreUpdate(state));
 
             m_InputField = ctxWindow.Q<TextField>("Input Field");
+            m_InputField.RegisterCallback<KeyDownEvent>(OnInputKeyDown, TrickleDown.TrickleDown);
 
             m_SendButton = ctxWindow.Q<IconButton>("Send Button");
             m_SendButton.clickable.clicked += OnSendButtonClicked;
@@ -76,6 +77,14 @@ namespace Unity.InferenceEngine.Samples.Chat
             m_StoreManager.Store.Dispatch(m_StoreManager.AddChatEntry.Invoke(newChatEntry));
             m_StoreManager.Store.Dispatch(m_StoreManager.SetAttachment.Invoke(null));
             m_InputField.value = string.Empty;
+        }
+
+        void OnInputKeyDown(KeyDownEvent evt)
+        {
+            if (evt.keyCode == KeyCode.Return)
+            {
+                OnSendButtonClicked();
+            }
         }
 
         Texture2D LoadImage(string path)
