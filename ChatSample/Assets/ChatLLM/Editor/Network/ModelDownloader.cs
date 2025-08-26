@@ -11,7 +11,8 @@ namespace Unity.InferenceEngine.Samples.Chat.Editor
     public class ModelDownloader
     {
         readonly string m_ModelsPath = Application.dataPath + "/ChatLLM/Resources/Models";
-        readonly Dictionary<string, int> m_LastLoggedProgress = new();
+        readonly Dictionary<string, float> m_LastLoggedProgress = new();
+        HfDownloader m_Downloader;
 
         static readonly (string fileName, string remotePath, string localPath)[] k_ModelFiles = {
             (LlavaConfig.DecoderModelFile, $"onnx/{LlavaConfig.DecoderModelFile}", LlavaConfig.DecoderModelPath + ".onnx"),
@@ -20,9 +21,17 @@ namespace Unity.InferenceEngine.Samples.Chat.Editor
             (LlavaConfig.TokenizerModelFile, LlavaConfig.TokenizerModelFile, LlavaConfig.TokenizerConfigPath + ".json")
         };
 
+        public ModelDownloader()
+        {
+            m_Downloader = new HfDownloader(
+                m_ModelsPath,
+                LlavaConfig.ModelId
+            );
+        }
+
         public async Task DownloadModels()
         {
-            var downloadTasks = new List<Task<string>>();
+            var downloadTasks = new List<Task>();
             foreach (var (fileName, remotePath, localPath) in k_ModelFiles)
             {
                 if (VerifyModelExist(localPath))
@@ -55,30 +64,18 @@ namespace Unity.InferenceEngine.Samples.Chat.Editor
             }
         }
 
-        Task<string> CreateDownloadTask(string fileName, string remotePath)
+        Task CreateDownloadTask(string fileName, string remotePath)
         {
-            var progress = new Progress<int>(p => LogProgress(fileName, p));
+            var progress = new Progress<float>(p => LogProgress(fileName, p));
 
             return Task.Run(() =>
-                HFDownloader.DownloadFileAsync(
-                    LlavaConfig.ModelId,
-                    remotePath,
-                    progress: progress,
-                    localDir: m_ModelsPath
-                )
+                m_Downloader.Download(remotePath, progress)
             );
         }
 
-        void LogProgress(string file, int progress)
+        void LogProgress(string file, float progress)
         {
-            m_LastLoggedProgress.TryAdd(file, -5);
-
-            var lastProgress = m_LastLoggedProgress[file];
-            if (progress - lastProgress >= 5)
-            {
-                m_LastLoggedProgress[file] = progress;
-                Debug.Log($"Downloading {file}: {progress}% complete.");
-            }
+            Debug.Log($"Downloading {file}: {progress}% complete.");
         }
 
         public static bool VerifyModelsExist()

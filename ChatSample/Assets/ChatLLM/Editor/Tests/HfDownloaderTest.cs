@@ -8,7 +8,7 @@ namespace Unity.InferenceEngine.Samples.Chat.Editor
 {
     public class HfDownloaderTest
     {
-        const string k_FilePath = "onnx/decoder_model_merged.onnx";
+        const string k_FilePath = "config.json";
         const string k_RepoId = "llava-hf/llava-onevision-qwen2-0.5b-si-hf";
         const string k_Revision = "main";
         const string k_DownloadPath = "Downloads";
