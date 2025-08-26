@@ -2,7 +2,6 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Threading.Tasks;
-using HuggingfaceHub;
 using UnityEditor;
 using UnityEngine;
 
@@ -52,13 +51,6 @@ namespace Unity.InferenceEngine.Samples.Chat.Editor
             }
             finally
             {
-                var cacheDir = HFGlobalConfig.DefaultCacheDir;
-                if (Directory.Exists(cacheDir))
-                {
-                    Directory.Delete(cacheDir, true);
-                    Debug.Log($"Deleted cache directory: {cacheDir}");
-                }
-
                 AssetDatabase.Refresh();
             }
         }
