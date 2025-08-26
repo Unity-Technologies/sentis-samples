@@ -28,6 +28,11 @@ namespace Unity.InferenceEngine.Samples.Chat
                              ?? throw new InvalidOperationException("No SynchronizationContext found. Must be created on Unity's main thread.");
         }
 
+        /// <summary>
+        /// Download a file from the specified Hugging Face repo and revision.
+        /// </summary>
+        /// <param name="filePath">The file path</param>
+        /// <param name="progress">Progress of download, value [0, 1]</param>
         public async Task Download(string filePath, IProgress<float> progress = null)
         {
             var url = GetUrl(m_RepoId, m_Revision, filePath);
