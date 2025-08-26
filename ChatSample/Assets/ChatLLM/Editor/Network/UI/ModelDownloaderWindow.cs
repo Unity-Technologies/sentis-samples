@@ -43,7 +43,7 @@ namespace Unity.InferenceEngine.Samples.Chat.Editor
         {
             foreach (var config in k_Configurations)
             {
-                if (!VerifyModelExist(config.localPath))
+                if (!VerifyModelExist(config.remotePath))
                     return false;
             }
             return true;
@@ -51,7 +51,7 @@ namespace Unity.InferenceEngine.Samples.Chat.Editor
 
         static bool VerifyModelExist(string localPath)
         {
-            return File.Exists(k_DownloadPath + localPath);
+            return File.Exists(Path.Join(k_DownloadPath, localPath));
         }
     }
 }
