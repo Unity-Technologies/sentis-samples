@@ -22,6 +22,7 @@ We use this to create a seamless conversational AI experience.
 - **Editor Integration**: Available as an Editor window for development and testing
 - **Streaming Responses**: Token-by-token response generation for responsive interaction
 - **Model Management**: HuggingFace model downloading
+
 ## Getting Started
 
 1. Open the Unity project
@@ -43,6 +44,6 @@ The chat interface supports:
 The sample demonstrates:
 - Integration of multimodal LLM models in Unity
 - Asynchronous model inference
-- UI Toolkit for modern editor interfaces
+- AppUI for modern editor interfaces
 - State management using Redux patterns
 - Model scheduling and resource management
