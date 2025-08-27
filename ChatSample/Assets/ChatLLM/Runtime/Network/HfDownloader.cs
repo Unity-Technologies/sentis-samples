@@ -46,11 +46,8 @@ namespace Unity.InferenceEngine.Samples.Chat
             var totalBytes = response.Content.Headers.ContentLength ?? -1L;
             var canReportProgress = totalBytes != -1 && progress != null;
 
-            var destinationPath = Path.Join(m_DownloadPath, filePath);
-            Directory.CreateDirectory(Path.GetDirectoryName(destinationPath));
-
             await using var contentStream = await response.Content.ReadAsStreamAsync();
-            await using var fileStream = File.Create(destinationPath);
+            using var memoryStream = new MemoryStream();
 
             var buffer = new byte[8192];
             long totalRead = 0;
@@ -58,7 +55,7 @@ namespace Unity.InferenceEngine.Samples.Chat
 
             while ((bytesRead = await contentStream.ReadAsync(buffer, 0, buffer.Length)) > 0)
             {
-                await fileStream.WriteAsync(buffer, 0, bytesRead);
+                await memoryStream.WriteAsync(buffer, 0, bytesRead);
                 totalRead += bytesRead;
 
                 if (canReportProgress)
@@ -69,6 +66,13 @@ namespace Unity.InferenceEngine.Samples.Chat
                     m_UnityContext.Post(_ => progress.Report(progressValue), null);
                 }
             }
+
+            // Write to disk only once, after complete download
+            var destinationPath = Path.Join(m_DownloadPath, filePath);
+            var directoryPath = Path.GetDirectoryName(destinationPath);
+            if (!string.IsNullOrEmpty(directoryPath))
+                Directory.CreateDirectory(directoryPath);
+            await File.WriteAllBytesAsync(destinationPath, memoryStream.ToArray());
         }
 
         static string GetUrl(string repoId, string revision, string filePath)
