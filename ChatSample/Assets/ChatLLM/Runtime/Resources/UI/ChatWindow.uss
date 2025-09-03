@@ -1,0 +1,92 @@
+.chat-window {
+    flex-grow: 1;
+    background-color: var(--appui-backgrounds-50);
+}
+
+.chat-history {
+    padding-top: var(--appui-spacing-200);
+    padding-right: var(--appui-spacing-200);
+    padding-left: var(--appui-spacing-200);
+    flex-grow: 1;
+}
+
+.chat-input {
+    flex-direction: row;
+    align-self: center;
+    width: 90%;
+    max-width: 400px;
+    padding-bottom: var(--appui-spacing-200);
+    padding-top: var(--appui-spacing-200);
+    flex-shrink: 0;
+}
+
+.input-field {
+    flex-shrink: 1;
+}
+
+.appui-icon--squares-four--regular {
+    --unity-image: var(--appui-icon-squares-four-regular);
+}
+
+.chat-entry-element {
+    max-width: 65%;
+}
+
+.user-entry {
+    align-self: flex-end;
+}
+
+.assistant-entry {
+    align-self: flex-start;
+}
+
+.user-entry > .chat-entry-message-container {
+    background-color: var(--appui-accent-200);
+}
+
+.assistant-entry > .chat-entry-message-container {
+    background-color: var(--appui-primary-200);
+}
+
+.chat-entry-message-container {
+    border-radius: var(--appui-border-radius-lg);
+    padding: var(--appui-spacing-100);
+}
+
+.chat-entry-timestamp {
+    padding-top: var(--appui-spacing-100);
+}
+
+.chat-entry-author {
+    padding-bottom: var(--appui-spacing-100);
+}
+
+.user-entry > .chat-entry-timestamp {
+    align-self: flex-end;
+}
+
+.user-entry > .chat-entry-author {
+    align-self: flex-end;
+}
+
+.chat-entry-attachment {
+    max-width: 200px;
+    max-height: 200px;
+}
+
+.input-container {
+    padding-top: var(--appui-spacing-100);
+    background-color: var(--appui-backgrounds-100);
+    flex-shrink: 0;
+}
+
+.attachment-element {
+    align-content: center;
+    align-self: center;
+    align-items: center;
+    border-radius: var(--appui-border-radius-md);
+    background-color: var(--appui-backgrounds-200);
+    flex-direction: row;
+    padding-left: var(--appui-spacing-100);
+    padding-right: var(--appui-spacing-100);
+}

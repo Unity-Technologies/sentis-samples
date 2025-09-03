@@ -2,6 +2,8 @@
 
 Contains example and template projects for Inference Engine package use.
 ## Samples
+[Chat LLM Sample](ChatSample/README.md)
+
 [Blaze Face/Hand/Pose Detection](BlazeDetectionSample/README.md)
 
 [Digit Recognition](DigitRecognitionSample/README.md)
