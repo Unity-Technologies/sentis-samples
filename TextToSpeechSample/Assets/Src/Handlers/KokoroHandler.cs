@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Threading.Tasks;
+using Unity.InferenceEngine.Samples.TTS.Assets;
 using UnityEditor;
 using UnityEngine;
 
@@ -11,6 +12,7 @@ namespace Unity.InferenceEngine.Samples.TTS.Handlers
     {
         const string k_KokoroModelPath = "onnx/model.onnx";
         const string k_VoicesFolderPath = "Voices/";
+        const string k_IndexFilePath = "voicesIndex";
 
         Model m_Model;
         Worker m_Worker;
@@ -58,19 +60,23 @@ namespace Unity.InferenceEngine.Samples.TTS.Handlers
         public static List<Voice> GetVoices()
         {
             var voices = new List<Voice>();
-            var voiceFiles = System.IO.Directory.GetFiles(Path.Join(Application.dataPath,"Resources",k_VoicesFolderPath), "*.bin");
+            var voicesIndex = Resources.Load<TextAsset>(k_IndexFilePath);
+            var voiceText = voicesIndex.text.Replace(".bin", string.Empty);
+            voiceText = voiceText.TrimEnd('\n');
+            var voicesList = voiceText.Split('\n');
 
-            foreach (var file in voiceFiles)
+
+            foreach (var file in voicesList)
             {
-                var voiceData = System.IO.File.ReadAllBytes(file);
+                var voiceAsset = Resources.Load<RawBytesAsset>(Path.Join(k_VoicesFolderPath, file));
+                var voiceData = voiceAsset.bytes;
 
                 var voiceArray = new float[voiceData.Length / sizeof(float)];
                 Buffer.BlockCopy(voiceData, 0, voiceArray, 0, voiceData.Length);
 
                 var styleShape = new TensorShape(voiceArray.Length / 256, 1, 256);
                 var tensor = new Tensor<float>(styleShape, voiceArray);
-                var fileName = System.IO.Path.GetFileNameWithoutExtension(file);
-                var voice = new Voice(fileName, tensor);
+                var voice = new Voice(file, tensor);
                 voices.Add(voice);
             }
 
