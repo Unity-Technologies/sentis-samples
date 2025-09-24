@@ -10,7 +10,7 @@ namespace Unity.InferenceEngine.Samples.TTS.Handlers
 {
     public class KokoroHandler: IDisposable
     {
-        const string k_KokoroModelPath = "onnx/model.onnx";
+        const string k_KokoroModelPath = "onnx/model";
         const string k_VoicesFolderPath = "Voices/";
         const string k_IndexFilePath = "voicesIndex";
 

@@ -1,0 +1,27 @@
+using System;
+using UnityEditor;
+using UnityEngine;
+using UnityEngine.UIElements;
+
+namespace Unity.InferenceEngine.Samples.TTS.Editor
+{
+    public class AppEditorWindow : EditorWindow
+    {
+        void CreateGUI()
+        {
+            rootVisualElement.Clear();
+            rootVisualElement.AddToClassList("unity-editor");
+            titleContent = new GUIContent("Kokoro TTS");
+            var visualTreeAsset = AssetDatabase.LoadAssetAtPath<VisualTreeAsset>("Assets/Src/UI/App.uxml");
+            visualTreeAsset.CloneTree(rootVisualElement);
+        }
+
+        [MenuItem("Inference Engine/Sample/TTS/Start Kokoro")]
+        public static void OpenWindow()
+        {
+            var window = GetWindow<AppEditorWindow>();
+            window.minSize = new Vector2(300, 400);
+            window.Show();
+        }
+    }
+}
