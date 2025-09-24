@@ -24,7 +24,11 @@ namespace Unity.InferenceEngine.Samples.TTS.State
 
             if (AudioClip != null)
             {
+#if UNITY_EDITOR
+                Object.DestroyImmediate(AudioClip);
+#else
                 Object.Destroy(AudioClip);
+#endif
             }
         }
 
