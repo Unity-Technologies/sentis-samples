@@ -1,10 +1,10 @@
 using System.Threading.Tasks;
 using Unity.InferenceEngine.Samples.TTS.State;
 using UnityEngine.UIElements;
-using Unity.AppUI.Redux;
 using Unity.AppUI.UI;
 using Unity.InferenceEngine.Samples.TTS.Utils;
 using UnityEngine;
+using Unity.AppUI.Redux;
 
 namespace Unity.InferenceEngine.Samples.TTS.UI
 {
@@ -12,6 +12,31 @@ namespace Unity.InferenceEngine.Samples.TTS.UI
     public partial class AudioPlayer : VisualElement
     {
         AppStoreManager m_StoreManager;
+
+        AudioSource AudioSource
+        {
+            get
+            {
+                if (m_AudioSource == null)
+                {
+                    var go = GameObject.Find("App");
+                    if (go == null)
+                    {
+                        go = new GameObject("App")
+                        {
+                            hideFlags = HideFlags.HideAndDontSave
+                        };
+
+                        go.AddComponent<AudioSource>();
+                    }
+
+                    m_AudioSource = go.GetComponent<AudioSource>();
+                }
+                return m_AudioSource;
+            }
+        }
+
+
         AudioSource m_AudioSource;
 
         IconButton m_PlayButton;
@@ -27,7 +52,6 @@ namespace Unity.InferenceEngine.Samples.TTS.UI
 
         void OnAttachToPanel(AttachToPanelEvent evt)
         {
-            m_AudioSource = GameObject.Find("App").GetComponent<AudioSource>();
             m_PlayButton = this.Q<IconButton>(classes: "play-button");
             m_PlayButton.clickable.clicked += OnPlayButtonClicked;
             m_SaveButton = this.Q<IconButton>(classes: "download-button");
@@ -36,13 +60,13 @@ namespace Unity.InferenceEngine.Samples.TTS.UI
             m_AudioProgress = this.Q<SliderFloat>(classes: "progress-bar");
             m_AudioProgress.RegisterValueChangingCallback(OnSliderValueChanging);
 
-            m_AudioProgress.RegisterCallback<PointerDownEvent>(_ => m_AudioSource.Pause(), TrickleDown.TrickleDown);
+            m_AudioProgress.RegisterCallback<PointerDownEvent>(_ => AudioSource.Pause(), TrickleDown.TrickleDown);
             m_AudioProgress.RegisterCallback<PointerUpEvent>(_ =>  Play(), TrickleDown.TrickleDown);
         }
 
         void OnSliderValueChanging(ChangingEvent<float> evt)
         {
-            m_AudioSource.time = evt.newValue / 100f * m_AudioSource.clip.length;
+            AudioSource.time = evt.newValue / 100f * AudioSource.clip.length;
             UpdateVisuals();
         }
 
@@ -54,16 +78,16 @@ namespace Unity.InferenceEngine.Samples.TTS.UI
 
         void OnPlayButtonClicked()
         {
-            if(m_AudioSource.isPlaying)
-                m_AudioSource.Pause();
+            if(AudioSource.isPlaying)
+                AudioSource.Pause();
             else
                 Play();
         }
 
         async Task Play()
         {
-            m_AudioSource.Play();
-            while (m_AudioSource.isPlaying)
+            AudioSource.Play();
+            while (AudioSource.isPlaying)
             {
                 UpdateVisuals();
                 await Task.Yield();
@@ -80,19 +104,17 @@ namespace Unity.InferenceEngine.Samples.TTS.UI
 
         void OnAudioClipChanged(AudioClip clip)
         {
-            m_AudioSource.clip = clip;
+            AudioSource.clip = clip;
             UpdateVisuals();
         }
 
         void UpdateVisuals()
         {
-            m_AudioProgress.SetValueWithoutNotify(m_AudioSource.time / m_AudioSource.clip.length * 100f);
-            m_TimeStamp.text = $"{m_AudioSource.time:0:00} / {m_AudioSource.clip.length:0:00}";
-            m_PlayButton.icon = m_AudioSource.isPlaying ? "pause" : "play";
+            m_AudioProgress.SetValueWithoutNotify(AudioSource.time / AudioSource.clip.length * 100f);
+            m_TimeStamp.text = $"{AudioSource.time:0:00} / {AudioSource.clip.length:0:00}";
+            m_PlayButton.icon = AudioSource.isPlaying ? "pause" : "play";
 
-            #if !UNITY_EDITOR
-            m_SaveButton.SetEnabled(false);
-            #endif
+            m_SaveButton.SetEnabled(Application.isEditor);
         }
 
         void OnSaveButtonClicked()
