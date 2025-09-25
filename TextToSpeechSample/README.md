@@ -6,7 +6,7 @@ Interactive text-to-speech interface powered by the Kokoro TTS model running loc
 
 ## Runtime Inference
 
-To power this experience we leverage the Kokoro model, a high-quality neural text-to-speech model.
+To power this experience we leverage the [Kokoro-82M-v1.0-ONNX](https://huggingface.co/onnx-community/Kokoro-82M-v1.0-ONNX) model, a high-quality neural text-to-speech model.
 
 The system processes text inputs through:
 - Text tokenization and grapheme-to-phoneme conversion using eSpeak
