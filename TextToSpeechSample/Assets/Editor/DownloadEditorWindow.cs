@@ -10,7 +10,7 @@ namespace Unity.InferenceEngine.Samples.TTS.Editor
         {
             rootVisualElement.Clear();
             rootVisualElement.AddToClassList("unity-editor");
-            titleContent = new GUIContent("Kokoro TTS - Download Models");
+            titleContent = new GUIContent("Kokoro TTS - Download Files");
             var visualTreeAsset = AssetDatabase.LoadAssetAtPath<VisualTreeAsset>("Assets/Src/UI/Network/ModelDownloaderWindow.uxml");
             visualTreeAsset.CloneTree(rootVisualElement);
         }

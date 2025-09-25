@@ -38,7 +38,7 @@ namespace Unity.InferenceEngine.Samples.TTS.UI.Network
 
             m_Status = VerifyModelExist() ? DownloadStatus.Downloaded : DownloadStatus.Missing;
 
-            m_Label = new Label(Path.Join("Assets", AppState.DownloadPath, configuration.fileName));
+            m_Label = new Label(Path.Join("Assets", AppState.DownloadPath, configuration.remotePath));
             Add(m_Label);
 
             m_DownloadButton = new IconButton
