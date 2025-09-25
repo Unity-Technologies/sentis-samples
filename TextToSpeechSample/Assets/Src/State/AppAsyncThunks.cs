@@ -1,6 +1,8 @@
+using System;
 using System.Threading.Tasks;
 using Unity.AppUI.Redux;
 using Unity.InferenceEngine.Samples.TTS.Handlers;
+using UnityEngine;
 
 namespace Unity.InferenceEngine.Samples.TTS.State
 {
@@ -8,10 +10,18 @@ namespace Unity.InferenceEngine.Samples.TTS.State
     {
         public static async Task<Tensor<float>> GenerateSpeech(IThunkAPI<Tensor<float>> thunkAPI)
         {
-            var store = thunkAPI.store as IStore<PartitionedState>;
-            var state = store.GetState<AppState>(AppSlice.Name);
-            var phonemes = PhonemesHandler.TokenizeGraphemes(state.InputText);
-            return await state.KokoroHandler.Execute(phonemes, state.Speed, state.Voice);
+            try
+            {
+                var store = thunkAPI.store as IStore<PartitionedState>;
+                var state = store.GetState<AppState>(AppSlice.Name);
+                var phonemes = PhonemesHandler.TokenizeGraphemes(state.InputText);
+                return await state.KokoroHandler.Execute(phonemes, state.Speed, state.Voice);
+            }
+            catch (Exception e)
+            {
+                Debug.LogError($"{e.Message}\n{e.StackTrace}");
+                throw;
+            }
         }
     }
 }
