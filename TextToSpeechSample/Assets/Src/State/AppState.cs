@@ -16,6 +16,11 @@ namespace Unity.InferenceEngine.Samples.TTS.State
         public GenerationStatus Status = GenerationStatus.Idle;
         public string Error = null;
 
+        public const string ModelId = "onnx-community/Kokoro-82M-v1.0-ONNX";
+        public const string OnnxPath = "onnx/model.onnx";
+        public const string VoicePath = "voices";
+        public const string DownloadPath = "Resources";
+
         public void CleanGenerationData()
         {
             Waveform?.Dispose();

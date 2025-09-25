@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Threading.Tasks;
 using Unity.InferenceEngine.Samples.TTS.Assets;
+using Unity.InferenceEngine.Samples.TTS.Utils;
 using UnityEditor;
 using UnityEngine;
 
@@ -12,7 +13,6 @@ namespace Unity.InferenceEngine.Samples.TTS.Handlers
     {
         const string k_KokoroModelPath = "onnx/model";
         const string k_VoicesFolderPath = "Voices/";
-        const string k_IndexFilePath = "voicesIndex";
 
         Model m_Model;
         Worker m_Worker;
@@ -60,15 +60,15 @@ namespace Unity.InferenceEngine.Samples.TTS.Handlers
         public static List<Voice> GetVoices()
         {
             var voices = new List<Voice>();
-            var voicesIndex = Resources.Load<TextAsset>(k_IndexFilePath);
-            var voiceText = voicesIndex.text.Replace(".bin", string.Empty);
-            voiceText = voiceText.TrimEnd('\n');
-            var voicesList = voiceText.Split('\n');
-
+            var voicesList = VoicesUtils.GetVoicesList();
 
             foreach (var file in voicesList)
             {
                 var voiceAsset = Resources.Load<RawBytesAsset>(Path.Join(k_VoicesFolderPath, file));
+
+                if (voiceAsset == null)
+                    continue;
+
                 var voiceData = voiceAsset.bytes;
 
                 var voiceArray = new float[voiceData.Length / sizeof(float)];
