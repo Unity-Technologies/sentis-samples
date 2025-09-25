@@ -23,5 +23,12 @@ namespace Unity.InferenceEngine.Samples.TTS.Editor
             window.minSize = new Vector2(300, 400);
             window.Show();
         }
+
+        [MenuItem("Inference Engine/Sample/TTS/Start Kokoro", true)]
+        public static bool ValidateOpenWindow()
+        {
+            var configurations = UI.Network.ModelDownloaderWindow.GetDownloadConfigurations();
+            return UI.Network.ModelDownloaderWindow.VerifyModelsExist(configurations);
+        }
     }
 }
