@@ -122,6 +122,8 @@ namespace Unity.InferenceEngine.Samples.TTS.UI
             #if UNITY_EDITOR
             //Open save file dialog
             var path = UnityEditor.EditorUtility.SaveFilePanel("Save Audio", "", "audio.wav", "wav");
+            if (string.IsNullOrEmpty(path))
+                return;
             var state = m_StoreManager.Store.GetState<AppState>(AppSlice.Name);
             WavUtils.WriteFloatWav(path, state.Waveform.DownloadToArray());
             #endif
