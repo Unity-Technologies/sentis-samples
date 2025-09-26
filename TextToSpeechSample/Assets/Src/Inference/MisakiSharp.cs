@@ -272,7 +272,8 @@ namespace Unity.InferenceEngine.Samples.TTS.Inference
             var tokens = new List<MToken>();
 
             // More sophisticated regex to handle punctuation, contractions, and spacing
-            var words = Regex.Split(text, @"(\s+|[.,!?;:—…""'()]+)")
+            // Note: Don't split on apostrophes to preserve contractions
+            var words = Regex.Split(text, @"(\s+|[.,!?;:—…""()]+)")
                 .Where(w => !string.IsNullOrEmpty(w))
                 .ToArray();
 
@@ -309,6 +310,13 @@ namespace Unity.InferenceEngine.Samples.TTS.Inference
         {
             var result = new List<string>();
 
+            // Don't split contractions - keep them as single tokens
+            if (IsContraction(word))
+            {
+                result.Add(word);
+                return result;
+            }
+
             // Handle leading quotes and punctuation
             var match = Regex.Match(word, @"^([""''""\u2018\u2019\u201C\u201D\(\[\{]*)(.*?)([""''""\u2018\u2019\u201C\u201D\)\]\}.,!?;:—…]*)$");
 
@@ -341,6 +349,15 @@ namespace Unity.InferenceEngine.Samples.TTS.Inference
             }
 
             return result.Where(s => !string.IsNullOrEmpty(s)).ToList();
+        }
+
+        private static bool IsContraction(string word)
+        {
+            // Check if word contains apostrophe and looks like a contraction/possessive
+            return (word.Contains("'") || word.Contains("'") || word.Contains("\u2019")) &&
+                   word.Length > 2 &&
+                   !word.StartsWith("'") && !word.StartsWith("'") && !word.StartsWith("\u2019") &&
+                   !word.EndsWith("'") && !word.EndsWith("'") && !word.EndsWith("\u2019");
         }
 
         private static string GetSimpleTag(string word)
@@ -390,18 +407,18 @@ namespace Unity.InferenceEngine.Samples.TTS.Inference
                 return GetNumberPhonemes(word);
             }
 
+            // Handle contractions first (before dictionary lookup)
+            var contractedPhonemes = HandleContractions(word);
+            if (!string.IsNullOrEmpty(contractedPhonemes))
+            {
+                return contractedPhonemes;
+            }
+
             // Try lexicon lookup
             var (phonemes, rating) = LookupWord(word, token.Tag, null, context);
             if (!string.IsNullOrEmpty(phonemes))
             {
                 return phonemes;
-            }
-
-            // Handle contractions as fallback
-            var contractedPhonemes = HandleContractions(word);
-            if (!string.IsNullOrEmpty(contractedPhonemes))
-            {
-                return contractedPhonemes;
             }
 
             // If no phonemes found, return empty (no eSpeak fallback)
@@ -529,10 +546,38 @@ namespace Unity.InferenceEngine.Samples.TTS.Inference
                 { "he'd", "hid" }, { "He'd", "hid" },
                 { "she'd", "ʃid" }, { "She'd", "ʃid" },
                 { "we'd", "wid" }, { "We'd", "wid" },
-                { "they'd", "ðeɪd" }, { "They'd", "ðeɪd" }
+                { "they'd", "ðeɪd" }, { "They'd", "ðeɪd" },
+                { "what's", "wʌts" }, { "What's", "wʌts" },
+                { "that's", "ðæts" }, { "That's", "ðæts" },
+                { "there's", "ðɛɹz" }, { "There's", "ðɛɹz" },
+                { "here's", "hɪɹz" }, { "Here's", "hɪɹz" },
+                { "where's", "wɛɹz" }, { "Where's", "wɛɹz" },
+                { "who's", "huz" }, { "Who's", "huz" },
+                { "how's", "haʊz" }, { "How's", "haʊz" },
+                { "when's", "wɛnz" }, { "When's", "wɛnz" },
+                { "why's", "waɪz" }, { "Why's", "waɪz" }
             };
 
-            return contractions.ContainsKey(word) ? contractions[word] : null;
+            // Check direct contraction first
+            if (contractions.ContainsKey(word))
+                return contractions[word];
+
+            // Handle general 's pattern for words not in the contractions list
+            if (word.EndsWith("'s") || word.EndsWith("'s") || word.EndsWith("\u2019s"))
+            {
+                var baseWord = word.EndsWith("'s") ? word.Substring(0, word.Length - 2) :
+                              word.EndsWith("'s") ? word.Substring(0, word.Length - 2) :
+                              word.Substring(0, word.Length - 2);
+
+                // Try to look up the base word and add "s" sound
+                var (basePhonemes, _) = LookupWord(baseWord, "NN", null, new TokenContext());
+                if (!string.IsNullOrEmpty(basePhonemes))
+                {
+                    return basePhonemes + "s";
+                }
+            }
+
+            return null;
         }
 
         private static (string, int) LookupWord(string word, string tag, float? stress, TokenContext context)
@@ -603,18 +648,6 @@ namespace Unity.InferenceEngine.Samples.TTS.Inference
                 }
             }
 
-            // Handle possessives (like "Today's" -> "Today" + "'s")
-            if (word.EndsWith("'s") || word.EndsWith("'s") || word.EndsWith("\u2019s"))
-            {
-                var baseWord = word.EndsWith("'s") ? word.Substring(0, word.Length - 2) :
-                              word.EndsWith("'s") ? word.Substring(0, word.Length - 2) :
-                              word.Substring(0, word.Length - 2);
-                var (basePhonemes, baseRating) = LookupWord(baseWord, tag, stress, context);
-                if (!string.IsNullOrEmpty(basePhonemes))
-                {
-                    return (basePhonemes + "s", baseRating);
-                }
-            }
 
             // Handle morphological variants
             var morphResult = TryMorphologicalLookup(word, tag, stress, context);

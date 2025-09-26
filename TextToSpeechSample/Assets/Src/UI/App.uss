@@ -1,6 +1,6 @@
 .tts-app{
     flex-grow: 1;
-    padding: var(--appui-spacing-100);
+    padding: var(--appui-spacing-300);
 }
 
 .tts-input-area{
