@@ -1,6 +1,6 @@
 using System;
 using Unity.AppUI.Redux;
-using Unity.InferenceEngine.Samples.TTS.Handlers;
+using Unity.InferenceEngine.Samples.TTS.Inference;
 using Unity.InferenceEngine.Samples.TTS.Utils;
 using UnityEngine;
 

@@ -1,6 +1,3 @@
-using Unity.AppUI.Redux;
-using Unity.InferenceEngine.Samples.TTS.Handlers;
-
 namespace Unity.InferenceEngine.Samples.TTS.State
 {
     public static class AppSlice

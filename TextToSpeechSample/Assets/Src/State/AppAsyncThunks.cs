@@ -1,7 +1,7 @@
 using System;
 using System.Threading.Tasks;
 using Unity.AppUI.Redux;
-using Unity.InferenceEngine.Samples.TTS.Handlers;
+using Unity.InferenceEngine.Samples.TTS.Inference;
 using UnityEngine;
 
 namespace Unity.InferenceEngine.Samples.TTS.State

@@ -1,5 +1,5 @@
 using NUnit.Framework;
-using Unity.InferenceEngine.Samples.TTS.Handlers;
+using Unity.InferenceEngine.Samples.TTS.Inference;
 using UnityEngine;
 
 namespace Unity.InferenceEngine.Samples.TTS.Tests

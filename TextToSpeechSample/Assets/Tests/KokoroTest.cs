@@ -3,7 +3,7 @@ using System.IO;
 using System.Text;
 using System.Threading.Tasks;
 using NUnit.Framework;
-using Unity.InferenceEngine.Samples.TTS.Handlers;
+using Unity.InferenceEngine.Samples.TTS.Inference;
 using Unity.InferenceEngine.Samples.TTS.Utils;
 using UnityEngine;
 

@@ -1,7 +1,7 @@
 using System.Collections.Generic;
 using Unity.AppUI.Redux;
 using Unity.AppUI.UI;
-using Unity.InferenceEngine.Samples.TTS.Handlers;
+using Unity.InferenceEngine.Samples.TTS.Inference;
 using Unity.InferenceEngine.Samples.TTS.State;
 using UnityEngine.UIElements;
 using System;

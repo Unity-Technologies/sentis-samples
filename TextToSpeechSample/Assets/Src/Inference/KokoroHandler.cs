@@ -7,7 +7,7 @@ using Unity.InferenceEngine.Samples.TTS.Utils;
 using UnityEditor;
 using UnityEngine;
 
-namespace Unity.InferenceEngine.Samples.TTS.Handlers
+namespace Unity.InferenceEngine.Samples.TTS.Inference
 {
     public class KokoroHandler: IDisposable
     {

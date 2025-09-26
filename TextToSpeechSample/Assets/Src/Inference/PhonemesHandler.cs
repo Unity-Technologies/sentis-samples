@@ -8,7 +8,7 @@ using System.Text.RegularExpressions;
 using UnityEngine;
 using Debug = UnityEngine.Debug;
 
-namespace Unity.InferenceEngine.Samples.TTS.Handlers
+namespace Unity.InferenceEngine.Samples.TTS.Inference
 {
     public static class PhonemesHandler
     {
