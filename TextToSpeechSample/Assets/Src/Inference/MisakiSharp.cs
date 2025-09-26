@@ -446,13 +446,34 @@ namespace Unity.InferenceEngine.Samples.TTS.Inference
             if (dict.ContainsKey(number))
                 return dict[number];
 
-            // For larger numbers, try to convert to words and lookup
+            // For larger numbers, try to convert to words and lookup each word
             var numberWord = ConvertNumberToWords(int.Parse(number));
             if (!string.IsNullOrEmpty(numberWord))
             {
-                var (phonemes, _) = LookupWord(numberWord, "CD", null, new TokenContext());
-                if (!string.IsNullOrEmpty(phonemes))
-                    return phonemes;
+                // Split multi-word numbers and look up each part
+                var words = numberWord.Split(' ');
+                var phonemeParts = new List<string>();
+
+                foreach (var word in words)
+                {
+                    if (string.IsNullOrEmpty(word)) continue;
+
+                    var (phonemes, _) = LookupWord(word, "CD", null, new TokenContext());
+                    if (!string.IsNullOrEmpty(phonemes))
+                    {
+                        phonemeParts.Add(phonemes);
+                    }
+                    else
+                    {
+                        // If any word fails, return empty
+                        return "";
+                    }
+                }
+
+                if (phonemeParts.Count > 0)
+                {
+                    return string.Join(" ", phonemeParts);
+                }
             }
 
             return "";
