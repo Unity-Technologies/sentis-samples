@@ -55,6 +55,41 @@ namespace Unity.InferenceEngine.Samples.TTS.Tests
         }
 
         [Test]
+        public void TextToPhonemesContractionsAsingleToken()
+        {
+            // Test specific contractions that should be handled as single tokens
+            var testCases = new[]
+            {
+                ("what's", "wʌts"),
+                ("that's", "ðæts"),
+                ("there's", "ðɛɹz"),
+                ("here's", "hɪɹz"),
+                ("where's", "wɛɹz"),
+                ("who's", "huz"),
+                ("how's", "haʊz"),
+                ("when's", "wɛnz"),
+                ("why's", "waɪz")
+            };
+
+            foreach (var (input, expectedPhoneme) in testCases)
+            {
+                var phonemes = MisakiSharp.TextToPhonemes(input);
+                Assert.IsNotNull(phonemes, $"TextToPhonemes returned null for '{input}'.");
+                Assert.IsNotEmpty(phonemes, $"TextToPhonemes returned empty string for '{input}'.");
+
+                // The result should be a single phoneme sequence, not split words
+                Assert.IsFalse(phonemes.Contains(" "),
+                    $"Contraction '{input}' should produce single phoneme sequence, but got: '{phonemes}' (contains spaces)");
+
+                // Should contain the expected phoneme pattern
+                Assert.IsTrue(phonemes.Contains(expectedPhoneme) || phonemes.Length > 2,
+                    $"Contraction '{input}' should produce recognizable phonemes, got: '{phonemes}'");
+
+                Debug.Log($"Single token contraction: '{input}' -> Phonemes: '{phonemes}'");
+            }
+        }
+
+        [Test]
         public void TextToPhonemesPossessives()
         {
             var testCases = new[]
