@@ -206,6 +206,18 @@ namespace Unity.InferenceEngine.Samples.TTS.Inference
 
                 _dictionariesLoaded = true;
                 Debug.Log($"Loaded dictionaries: Gold={_goldDictionary.Count}, Silver={_silverDictionary.Count}");
+
+                // Debug: Check if test words are loaded
+                if (_goldDictionary.ContainsKey("hello"))
+                    Debug.Log($"'hello' found in gold dictionary: {_goldDictionary["hello"]}");
+                if (_goldDictionary.ContainsKey("if"))
+                    Debug.Log($"'if' found in gold dictionary: {_goldDictionary["if"]}");
+                if (_goldDictionary.ContainsKey("today"))
+                    Debug.Log($"'today' found in gold dictionary: {_goldDictionary["today"]}");
+                if (_goldDictionary.ContainsKey("worcestershire"))
+                    Debug.Log($"'worcestershire' found in gold dictionary: {_goldDictionary["worcestershire"]}");
+                else
+                    Debug.Log("'worcestershire' NOT found in gold dictionary");
             }
             catch (Exception ex)
             {
@@ -271,27 +283,77 @@ namespace Unity.InferenceEngine.Samples.TTS.Inference
         private static List<MToken> SimpleTokenize(string text)
         {
             var tokens = new List<MToken>();
-            var words = Regex.Split(text, @"(\s+|[.,!?;:])")
+            // More sophisticated regex to handle punctuation, contractions, and spacing
+            var words = Regex.Split(text, @"(\s+|[.,!?;:—…""'()]+)")
                 .Where(w => !string.IsNullOrEmpty(w))
                 .ToArray();
 
             for (int i = 0; i < words.Length; i++)
             {
                 var word = words[i];
-                var token = new MToken
-                {
-                    Text = word.Trim(),
-                    Whitespace = (i < words.Length - 1 && char.IsWhiteSpace(word.LastOrDefault())) ? " " : "",
-                    Tag = GetSimpleTag(word)
-                };
+                var trimmedWord = word.Trim();
 
-                if (!string.IsNullOrWhiteSpace(token.Text))
+                if (string.IsNullOrWhiteSpace(trimmedWord))
+                    continue;
+
+                // Handle words with attached punctuation (like "Hello,", "Today's", etc.)
+                var cleanedWords = SplitWordWithPunctuation(trimmedWord);
+
+                foreach (var cleanWord in cleanedWords)
                 {
-                    tokens.Add(token);
+                    if (!string.IsNullOrWhiteSpace(cleanWord))
+                    {
+                        var token = new MToken
+                        {
+                            Text = cleanWord,
+                            Whitespace = (i == words.Length - 1 && cleanWord == cleanedWords.Last()) ? "" : " ",
+                            Tag = GetSimpleTag(cleanWord)
+                        };
+                        tokens.Add(token);
+                    }
                 }
             }
 
             return tokens;
+        }
+
+        private static List<string> SplitWordWithPunctuation(string word)
+        {
+            var result = new List<string>();
+
+            // Handle leading quotes and punctuation
+            var match = Regex.Match(word, @"^([""'\(\[\{]*)(.*?)([""'\)\]\}.,!?;:—…—]*)$");
+            if (match.Success)
+            {
+                var leadingPunct = match.Groups[1].Value;
+                var coreWord = match.Groups[2].Value;
+                var trailingPunct = match.Groups[3].Value;
+
+                // Add leading punctuation as separate tokens
+                foreach (char c in leadingPunct)
+                {
+                    if (!char.IsWhiteSpace(c))
+                        result.Add(c.ToString());
+                }
+
+                if (!string.IsNullOrEmpty(coreWord))
+                {
+                    result.Add(coreWord);
+                }
+
+                // Add trailing punctuation as separate tokens
+                foreach (char c in trailingPunct)
+                {
+                    if (!char.IsWhiteSpace(c))
+                        result.Add(c.ToString());
+                }
+            }
+            else
+            {
+                result.Add(word);
+            }
+
+            return result.Where(s => !string.IsNullOrEmpty(s)).ToList();
         }
 
         private static string GetSimpleTag(string word)
@@ -320,28 +382,36 @@ namespace Unity.InferenceEngine.Samples.TTS.Inference
             if (string.IsNullOrEmpty(word))
                 return "";
 
+            Debug.Log($"Processing word: '{word}' with tag: '{token.Tag}'");
+
             // Handle punctuation
-            if (PUNCTS.Contains(word.FirstOrDefault()))
+            if (word.Length == 1 && PUNCTS.Contains(word[0]))
             {
-                return GetPunctuationPhonemes(word);
+                var punctPhonemes = GetPunctuationPhonemes(word);
+                Debug.Log($"Punctuation '{word}' -> '{punctPhonemes}'");
+                return punctPhonemes;
             }
 
             // Handle symbols
             if (SYMBOLS.ContainsKey(word))
             {
+                Debug.Log($"Symbol '{word}' -> '{SYMBOLS[word]}'");
                 return GetWordPhonemes(new MToken { Text = SYMBOLS[word], Tag = "NN" }, context);
             }
 
             // Handle numbers
             if (Regex.IsMatch(word, @"^\d+$"))
             {
-                return GetNumberPhonemes(word);
+                var numPhonemes = GetNumberPhonemes(word);
+                Debug.Log($"Number '{word}' -> '{numPhonemes}'");
+                return numPhonemes;
             }
 
             // Try lexicon lookup
             var (phonemes, rating) = LookupWord(word, token.Tag, null, context);
             if (!string.IsNullOrEmpty(phonemes))
             {
+                Debug.Log($"Dictionary lookup '{word}' -> '{phonemes}'");
                 return phonemes;
             }
 
@@ -349,11 +419,12 @@ namespace Unity.InferenceEngine.Samples.TTS.Inference
             var contractedPhonemes = HandleContractions(word);
             if (!string.IsNullOrEmpty(contractedPhonemes))
             {
+                Debug.Log($"Contraction '{word}' -> '{contractedPhonemes}'");
                 return contractedPhonemes;
             }
 
             // If no phonemes found, return empty (no eSpeak fallback)
-            Debug.LogWarning($"Could not find phonemes for word: {word}");
+            Debug.LogWarning($"Could not find phonemes for word: '{word}' (tag: '{token.Tag}')");
             return "";
         }
 
@@ -457,6 +528,9 @@ namespace Unity.InferenceEngine.Samples.TTS.Inference
 
         private static (string, int) LookupWord(string word, string tag, float? stress, TokenContext context)
         {
+            if (string.IsNullOrEmpty(word))
+                return ("", 0);
+
             // Handle special cases first
             var specialCase = GetSpecialCase(word, tag, stress, context);
             if (!string.IsNullOrEmpty(specialCase.Item1))
@@ -464,49 +538,74 @@ namespace Unity.InferenceEngine.Samples.TTS.Inference
 
             var isNNP = false;
             var originalWord = word;
+            var lookupWord = word;
 
-            // Handle uppercase words
-            if (word == word.ToUpper() && !_goldDictionary.ContainsKey(word))
+            // Handle case variations - try original case first, then lowercase
+            var casesToTry = new List<string>();
+            casesToTry.Add(word);
+            if (word != word.ToLower())
+                casesToTry.Add(word.ToLower());
+            if (word != word.ToUpper())
+                casesToTry.Add(word.ToUpper());
+
+            foreach (var caseVariant in casesToTry)
             {
-                word = word.ToLower();
-                isNNP = tag == "NNP";
+                // Try gold dictionary first
+                if (_goldDictionary.ContainsKey(caseVariant))
+                {
+                    var entry = _goldDictionary[caseVariant];
+                    string phonemes = null;
+                    int rating = 4;
+
+                    if (entry is string simplePhonemes)
+                    {
+                        phonemes = simplePhonemes;
+                    }
+                    else if (entry is JObject complexEntry)
+                    {
+                        // Handle complex entries with multiple POS tags
+                        if (!string.IsNullOrEmpty(tag) && complexEntry.ContainsKey(tag))
+                        {
+                            phonemes = complexEntry[tag]?.ToString();
+                        }
+                        else if (complexEntry.ContainsKey("DEFAULT"))
+                        {
+                            phonemes = complexEntry["DEFAULT"]?.ToString();
+                        }
+                        else
+                        {
+                            // If no specific tag match, try the first available entry
+                            var firstEntry = complexEntry.Properties().FirstOrDefault();
+                            phonemes = firstEntry?.Value?.ToString();
+                        }
+                    }
+
+                    if (!string.IsNullOrEmpty(phonemes))
+                    {
+                        Debug.Log($"Found phonemes for '{word}': {phonemes}");
+                        return (ApplyStress(phonemes, stress), rating);
+                    }
+                }
+
+                // Try silver dictionary if not found in gold and not a proper noun
+                if (!isNNP && _silverDictionary.ContainsKey(caseVariant))
+                {
+                    var phonemes = _silverDictionary[caseVariant];
+                    Debug.Log($"Found phonemes in silver for '{word}': {phonemes}");
+                    return (ApplyStress(phonemes, stress), 3);
+                }
             }
 
-            // Try gold dictionary first
-            if (_goldDictionary.ContainsKey(word))
+            // Handle possessives (like "Today's" -> "Today" + "'s")
+            if (word.EndsWith("'s") || word.EndsWith("'s"))
             {
-                var entry = _goldDictionary[word];
-                string phonemes = null;
-                int rating = 4;
-
-                if (entry is string simplePhonemes)
+                var baseWord = word.EndsWith("'s") ? word.Substring(0, word.Length - 2) : word.Substring(0, word.Length - 2);
+                var (basePhonemes, baseRating) = LookupWord(baseWord, tag, stress, context);
+                if (!string.IsNullOrEmpty(basePhonemes))
                 {
-                    phonemes = simplePhonemes;
+                    Debug.Log($"Possessive '{word}' -> '{basePhonemes}' + 's'");
+                    return (basePhonemes + "s", baseRating);
                 }
-                else if (entry is JObject complexEntry)
-                {
-                    // Handle complex entries with multiple POS tags
-                    if (complexEntry.ContainsKey(tag))
-                    {
-                        phonemes = complexEntry[tag]?.ToString();
-                    }
-                    else if (complexEntry.ContainsKey("DEFAULT"))
-                    {
-                        phonemes = complexEntry["DEFAULT"]?.ToString();
-                    }
-                }
-
-                if (!string.IsNullOrEmpty(phonemes))
-                {
-                    return (ApplyStress(phonemes, stress), rating);
-                }
-            }
-
-            // Try silver dictionary if not found in gold and not a proper noun
-            if (!isNNP && _silverDictionary.ContainsKey(word))
-            {
-                var phonemes = _silverDictionary[word];
-                return (ApplyStress(phonemes, stress), 3);
             }
 
             // Handle morphological variants
