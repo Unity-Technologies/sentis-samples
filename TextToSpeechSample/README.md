@@ -9,7 +9,7 @@ Interactive text-to-speech interface powered by the Kokoro TTS model running loc
 To power this experience we leverage the [Kokoro-82M-v1.0-ONNX](https://huggingface.co/onnx-community/Kokoro-82M-v1.0-ONNX) model, a high-quality neural text-to-speech model.
 
 The system processes text inputs through:
-- Text tokenization and grapheme-to-phoneme conversion using eSpeak
+- Text tokenization and grapheme-to-phoneme conversion using our C# implementation of Misaki for English
 - Neural voice synthesis using the Kokoro ONNX model
 - Real-time audio generation with multiple voice options
 - Configurable speech speed and voice selection
@@ -24,7 +24,7 @@ We use this to create a seamless text-to-speech experience with natural-sounding
 - **Editor Integration**: Available as an Editor window for development and testing
 - **Cross-Platform**: Support for macOS, Windows, Linux, and Android
 - **Model Management**: Automated model downloading and setup
-- **Phoneme Processing**: Automatic grapheme-to-phoneme conversion using eSpeak
+- **Phoneme Processing**: Automatic grapheme-to-phoneme conversion using dictionary-based lookup with comprehensive English lexicon
 
 ## Getting Started
 
@@ -41,6 +41,18 @@ The TTS interface supports:
 - Real-time speech generation
 - Audio playback controls
 
+## Grapheme-to-Phoneme Conversion
+
+This sample features a complete C# implementation of dictionary-based grapheme-to-phoneme conversion, inspired by the Misaki project. The system includes:
+
+- **Comprehensive English Lexicon**: Uses gold and silver pronunciation dictionaries with over 130,000 word entries
+- **Intelligent Text Processing**: Handles contractions, possessives, punctuation, and Unicode characters
+- **Morphological Analysis**: Automatic handling of word variants with suffixes (-s, -ed, -ing)
+- **Context-Aware Pronunciation**: Adjusts pronunciation based on surrounding context (e.g., "the" before vowels vs consonants)
+- **No External Dependencies**: Self-contained implementation requiring no external tools or processes
+
+The phoneme conversion system processes text through sophisticated tokenization, dictionary lookup, and fallback mechanisms to ensure accurate pronunciation for the Kokoro TTS model.
+
 ## Technical Implementation
 
 The sample demonstrates:
@@ -50,4 +62,4 @@ The sample demonstrates:
 - State management using Redux patterns
 - Model scheduling and resource management
 - Cross-platform audio generation
-- eSpeak integration for phoneme conversion
+- Advanced text-to-phoneme processing with comprehensive English language support
