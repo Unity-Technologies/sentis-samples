@@ -14,7 +14,7 @@ namespace Unity.InferenceEngine.Samples.TTS.State
             {
                 var store = thunkAPI.store as IStore<PartitionedState>;
                 var state = store.GetState<AppState>(AppSlice.Name);
-                var phonemes = PhonemesHandler.TokenizeGraphemes(state.InputText);
+                var phonemes = MisakiSharp.TokenizeGraphemes(state.InputText);
                 return await state.KokoroHandler.Execute(phonemes, state.Speed, state.Voice);
             }
             catch (Exception e)
