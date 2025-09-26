@@ -21,7 +21,7 @@ namespace Unity.InferenceEngine.Samples.TTS.State
         {
             var state = new AppState
             {
-                KokoroHandler = new KokoroHandler()
+                KokoroHandler = new KokoroHandler(lazyLoadModel: !Application.isPlaying),
             };
 
             var slice = StoreFactory.CreateSlice(
