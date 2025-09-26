@@ -11,18 +11,12 @@ namespace Unity.InferenceEngine.Samples.TTS.Tests
         [Test]
         public void TokenizePhonemes()
         {
-            var phonemes = PhonemesHandler.TextToPhonemes(k_TestText);
-            Assert.IsNotNull(phonemes, "Phoneme conversion returned null.");
-            Assert.IsNotEmpty(phonemes, "Phoneme conversion returned empty string.");
-
-            var tokens = PhonemesHandler.Tokenize(phonemes);
+            var tokens =MisakiSharp.TokenizeGraphemes(k_TestText);
             Assert.IsNotNull(tokens, "Tokenization returned null.");
             Assert.IsNotEmpty(tokens, "Tokenization returned empty array.");
 
             Debug.Log($"Text: {k_TestText}");
-            Debug.Log($"Phonemes: {phonemes}");
             Debug.Log($"Tokens: {string.Join(", ", tokens)}");
-
         }
     }
 }

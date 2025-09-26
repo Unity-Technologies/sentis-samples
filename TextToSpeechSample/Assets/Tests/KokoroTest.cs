@@ -42,7 +42,7 @@ namespace Unity.InferenceEngine.Samples.TTS.Tests
         [Test]
         public async Task RunKokoroWithText()
         {
-            var phonemes = PhonemesHandler.TokenizeGraphemes(k_TestSentence);
+            var phonemes = MisakiSharp.TokenizeGraphemes(k_TestSentence);
             var voices = KokoroHandler.GetVoices();
             using var output = await m_KokoroHandler.Execute(phonemes, speed: 1.0f, voices[0]);
 
