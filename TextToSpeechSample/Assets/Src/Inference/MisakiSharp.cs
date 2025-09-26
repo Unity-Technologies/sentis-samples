@@ -40,21 +40,6 @@ namespace Unity.InferenceEngine.Samples.TTS.Inference
 
     public static class MisakiSharp
     {
-        private static List<string> _debugLog = new List<string>();
-
-        private static void LogDebug(string message)
-        {
-            _debugLog.Add(message);
-        }
-
-        private static void FlushDebugLog()
-        {
-            if (_debugLog.Count > 0)
-            {
-                Debug.Log("MISAKI DEBUG:\n" + string.Join("\n", _debugLog));
-                _debugLog.Clear();
-            }
-        }
         // Character sets
         private static readonly HashSet<char> DIPHTHONGS = new HashSet<char>("AIOQWYʤʧ".ToCharArray());
         private static readonly HashSet<char> CONSONANTS = new HashSet<char>("bdfhjklmnpstvwzðŋɡɹɾʃʒʤʧθ".ToCharArray());
@@ -220,19 +205,6 @@ namespace Unity.InferenceEngine.Samples.TTS.Inference
                 }
 
                 _dictionariesLoaded = true;
-                Debug.Log($"Loaded dictionaries: Gold={_goldDictionary.Count}, Silver={_silverDictionary.Count}");
-
-                // Debug: Check if test words are loaded
-                if (_goldDictionary.ContainsKey("hello"))
-                    Debug.Log($"'hello' found in gold dictionary: {_goldDictionary["hello"]}");
-                if (_goldDictionary.ContainsKey("if"))
-                    Debug.Log($"'if' found in gold dictionary: {_goldDictionary["if"]}");
-                if (_goldDictionary.ContainsKey("today"))
-                    Debug.Log($"'today' found in gold dictionary: {_goldDictionary["today"]}");
-                if (_goldDictionary.ContainsKey("worcestershire"))
-                    Debug.Log($"'worcestershire' found in gold dictionary: {_goldDictionary["worcestershire"]}");
-                else
-                    Debug.Log("'worcestershire' NOT found in gold dictionary");
             }
             catch (Exception ex)
             {
@@ -292,22 +264,17 @@ namespace Unity.InferenceEngine.Samples.TTS.Inference
                 }
             }
 
-            var finalResult = string.Join(" ", result);
-            FlushDebugLog();
-            return finalResult;
+            return string.Join(" ", result);
         }
 
         private static List<MToken> SimpleTokenize(string text)
         {
             var tokens = new List<MToken>();
-            LogDebug($"TOKENIZE: Input='{text}'");
 
             // More sophisticated regex to handle punctuation, contractions, and spacing
             var words = Regex.Split(text, @"(\s+|[.,!?;:—…""'()]+)")
                 .Where(w => !string.IsNullOrEmpty(w))
                 .ToArray();
-
-            LogDebug($"TOKENIZE: Split=[{string.Join("], [", words)}]");
 
             for (int i = 0; i < words.Length; i++)
             {
@@ -317,11 +284,8 @@ namespace Unity.InferenceEngine.Samples.TTS.Inference
                 if (string.IsNullOrWhiteSpace(trimmedWord))
                     continue;
 
-                LogDebug($"TOKENIZE: Processing='{trimmedWord}'");
-
                 // Handle words with attached punctuation (like "Hello,", "Today's", etc.)
                 var cleanedWords = SplitWordWithPunctuation(trimmedWord);
-                LogDebug($"TOKENIZE: Cleaned=[{string.Join("], [", cleanedWords)}]");
 
                 foreach (var cleanWord in cleanedWords)
                 {
@@ -333,7 +297,6 @@ namespace Unity.InferenceEngine.Samples.TTS.Inference
                             Whitespace = (i == words.Length - 1 && cleanWord == cleanedWords.Last()) ? "" : " ",
                             Tag = GetSimpleTag(cleanWord)
                         };
-                        LogDebug($"TOKENIZE: Token='{token.Text}' tag='{token.Tag}'");
                         tokens.Add(token);
                     }
                 }
@@ -345,19 +308,15 @@ namespace Unity.InferenceEngine.Samples.TTS.Inference
         private static List<string> SplitWordWithPunctuation(string word)
         {
             var result = new List<string>();
-            LogDebug($"SPLIT: Input='{word}'");
 
             // Handle leading quotes and punctuation
             var match = Regex.Match(word, @"^([""''""\u2018\u2019\u201C\u201D\(\[\{]*)(.*?)([""''""\u2018\u2019\u201C\u201D\)\]\}.,!?;:—…]*)$");
-            LogDebug($"SPLIT: Match={match.Success}");
 
             if (match.Success)
             {
                 var leadingPunct = match.Groups[1].Value;
                 var coreWord = match.Groups[2].Value;
                 var trailingPunct = match.Groups[3].Value;
-
-                LogDebug($"SPLIT: Lead='{leadingPunct}' Core='{coreWord}' Trail='{trailingPunct}'");
 
                 // Add leading punctuation as separate tokens
                 foreach (char c in leadingPunct)
@@ -381,7 +340,6 @@ namespace Unity.InferenceEngine.Samples.TTS.Inference
                 result.Add(word);
             }
 
-            LogDebug($"SPLIT: Result=[{string.Join("], [", result)}]");
             return result.Where(s => !string.IsNullOrEmpty(s)).ToList();
         }
 
@@ -392,7 +350,10 @@ namespace Unity.InferenceEngine.Samples.TTS.Inference
 
             word = word.Trim();
 
-            if (PUNCT_TAGS.Contains(word) || PUNCTS.Contains(word.FirstOrDefault()))
+            // Check for punctuation - including quotes and other symbols
+            if (PUNCT_TAGS.Contains(word) ||
+                PUNCTS.Contains(word.FirstOrDefault()) ||
+                word.All(c => !char.IsLetterOrDigit(c))) // Any non-alphanumeric character
                 return "PUNCT";
 
             if (Regex.IsMatch(word, @"^\d+$"))
@@ -411,36 +372,28 @@ namespace Unity.InferenceEngine.Samples.TTS.Inference
             if (string.IsNullOrEmpty(word))
                 return "";
 
-            LogDebug($"WORD: '{word}' tag='{token.Tag}'");
-
             // Handle punctuation
             if (word.Length == 1 && PUNCTS.Contains(word[0]))
             {
-                var punctPhonemes = GetPunctuationPhonemes(word);
-                LogDebug($"PUNCT: '{word}' -> '{punctPhonemes}'");
-                return punctPhonemes;
+                return GetPunctuationPhonemes(word);
             }
 
             // Handle symbols
             if (SYMBOLS.ContainsKey(word))
             {
-                LogDebug($"SYMBOL: '{word}' -> '{SYMBOLS[word]}'");
                 return GetWordPhonemes(new MToken { Text = SYMBOLS[word], Tag = "NN" }, context);
             }
 
             // Handle numbers
             if (Regex.IsMatch(word, @"^\d+$"))
             {
-                var numPhonemes = GetNumberPhonemes(word);
-                LogDebug($"NUMBER: '{word}' -> '{numPhonemes}'");
-                return numPhonemes;
+                return GetNumberPhonemes(word);
             }
 
             // Try lexicon lookup
             var (phonemes, rating) = LookupWord(word, token.Tag, null, context);
             if (!string.IsNullOrEmpty(phonemes))
             {
-                LogDebug($"DICT: '{word}' -> '{phonemes}'");
                 return phonemes;
             }
 
@@ -448,12 +401,15 @@ namespace Unity.InferenceEngine.Samples.TTS.Inference
             var contractedPhonemes = HandleContractions(word);
             if (!string.IsNullOrEmpty(contractedPhonemes))
             {
-                LogDebug($"CONTRACT: '{word}' -> '{contractedPhonemes}'");
                 return contractedPhonemes;
             }
 
             // If no phonemes found, return empty (no eSpeak fallback)
-            Debug.LogWarning($"Could not find phonemes for word: '{word}' (tag: '{token.Tag}')");
+            // Only warn for actual words, not punctuation
+            if (token.Tag != "PUNCT")
+            {
+                Debug.LogWarning($"Could not find phonemes for word: '{word}' (tag: '{token.Tag}')");
+            }
             return "";
         }
 
@@ -614,7 +570,6 @@ namespace Unity.InferenceEngine.Samples.TTS.Inference
 
                     if (!string.IsNullOrEmpty(phonemes))
                     {
-                        Debug.Log($"Found phonemes for '{word}': {phonemes}");
                         return (ApplyStress(phonemes, stress), rating);
                     }
                 }
@@ -623,7 +578,6 @@ namespace Unity.InferenceEngine.Samples.TTS.Inference
                 if (!isNNP && _silverDictionary.ContainsKey(caseVariant))
                 {
                     var phonemes = _silverDictionary[caseVariant];
-                    Debug.Log($"Found phonemes in silver for '{word}': {phonemes}");
                     return (ApplyStress(phonemes, stress), 3);
                 }
             }
@@ -637,7 +591,6 @@ namespace Unity.InferenceEngine.Samples.TTS.Inference
                 var (basePhonemes, baseRating) = LookupWord(baseWord, tag, stress, context);
                 if (!string.IsNullOrEmpty(basePhonemes))
                 {
-                    LogDebug($"Possessive '{word}' -> '{basePhonemes}' + 's'");
                     return (basePhonemes + "s", baseRating);
                 }
             }
