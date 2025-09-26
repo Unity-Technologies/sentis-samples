@@ -40,7 +40,13 @@ namespace Unity.InferenceEngine.Samples.TTS.Handlers
 
         public async Task<Tensor<float>> Execute(int[] inputIds, float speed, Voice voice)
         {
-            using var inputIdsTensor = new Tensor<int>(new TensorShape(1, inputIds.Length), inputIds);
+            // Add the pad ids
+            var paddedInputIds = new int[inputIds.Length + 2];
+            paddedInputIds[0] = 0;
+            Array.Copy(inputIds, 0, paddedInputIds, 1, inputIds.Length);
+            paddedInputIds[^1] = 0;
+
+            using var inputIdsTensor = new Tensor<int>(new TensorShape(1, paddedInputIds.Length), paddedInputIds);
             using var speedTensor = new Tensor<float>(new TensorShape(1), new[] { speed });
             using var voiceTensor = await GetVoiceVector(inputIdsTensor, voice.Tensor);
 
