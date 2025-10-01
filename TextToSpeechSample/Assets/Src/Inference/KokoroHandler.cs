@@ -59,8 +59,10 @@ namespace Unity.InferenceEngine.Samples.TTS.Inference
 
             m_Worker.Schedule(inputIdsTensor, voiceTensor, speedTensor);
             using var result = m_Worker.PeekOutput() as Tensor<float>;
-            var output = await result.ReadbackAndCloneAsync();
-            return output;
+            using var output = await result.ReadbackAndCloneAsync();
+
+            var processedOutput = KokoroOutputProcessor.Apply2NotchFiltering(output);
+            return processedOutput;
         }
 
         public static List<Voice> GetVoices()
