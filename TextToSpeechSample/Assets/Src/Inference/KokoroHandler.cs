@@ -98,7 +98,6 @@ namespace Unity.InferenceEngine.Samples.TTS.Inference
             graph.AddOutput(output, "output");
             var model = graph.Compile();
 
-
             using var worker = new Worker(model, m_BackendType);
             worker.Schedule(voice);
             using var result = worker.PeekOutput() as Tensor<float>;
