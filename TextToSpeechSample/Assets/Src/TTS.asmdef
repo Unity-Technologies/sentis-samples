@@ -1,18 +1,18 @@
 {
-    "name": "TTS",
-    "rootNamespace": "Unity.InferenceEngine.Samples.TTS",
-    "references": [
-        "GUID:63a57c8b658089e49a173b0f0c4870a7",
-        "GUID:2f101f87087d58f4ba92ca00188e763d",
-        "GUID:710bb277e6ff49ed91ba164465e106ef"
-    ],
-    "includePlatforms": [],
-    "excludePlatforms": [],
-    "allowUnsafeCode": false,
-    "overrideReferences": false,
-    "precompiledReferences": [],
-    "autoReferenced": true,
-    "defineConstraints": [],
-    "versionDefines": [],
-    "noEngineReferences": false
+  "name": "TTS",
+  "rootNamespace": "Unity.InferenceEngine.Samples.TTS",
+  "references": [
+    "GUID:63a57c8b658089e49a173b0f0c4870a7",
+    "GUID:2f101f87087d58f4ba92ca00188e763d",
+    "GUID:710bb277e6ff49ed91ba164465e106ef"
+  ],
+  "includePlatforms": [],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "overrideReferences": false,
+  "precompiledReferences": [],
+  "autoReferenced": true,
+  "defineConstraints": [],
+  "versionDefines": [],
+  "noEngineReferences": false
 }

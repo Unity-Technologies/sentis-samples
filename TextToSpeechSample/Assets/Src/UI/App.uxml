@@ -1,28 +1,28 @@
 <?xml version="1.0" encoding="utf-8"?>
 
 <engine:UXML
-    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-    xmlns:engine="UnityEngine.UIElements"
-    xmlns:editor="UnityEditor.UIElements"
-    xsi:noNamespaceSchemaLocation="../../../../../../UIElementsSchema/UIElements.xsd"
-    xmlns:appui="Unity.AppUI.UI"
-    xmlns:tts="Unity.InferenceEngine.Samples.TTS.UI">
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xmlns:engine="UnityEngine.UIElements"
+        xmlns:appui="Unity.AppUI.UI"
+        xmlns:tts="Unity.InferenceEngine.Samples.TTS.UI"
+        xsi:noNamespaceSchemaLocation="../../../../../../UIElementsSchema/UIElements.xsd">
     <engine:Style
-        src="project://database/Packages/com.unity.dt.app-ui/PackageResources/Styles/Themes/App UI - Editor Dark - Small.tss" />
-    <engine:Style src="App.uss" />
-    <engine:Template src="AudioPlayer.uxml" name="AudioPlayer" />
+            src="project://database/Packages/com.unity.dt.app-ui/PackageResources/Styles/Themes/App UI - Editor Dark - Small.tss"/>
+    <engine:Style src="App.uss"/>
+    <engine:Template src="AudioPlayer.uxml" name="AudioPlayer"/>
 
     <appui:Panel>
         <tts:App name="TTS App" class="tts-app">
-            <appui:TextArea name="Input Area" class="tts-input-area" placeholder="Enter your text here..." />
-            <appui:Spacer />
-            <appui:TouchSliderFloat name="Speed Slider" class="tts-speed-slider" label="Speed" low-value = "0.5" high-value="2.0" value="1.0" />
-            <appui:Spacer />
-            <appui:Dropdown name="Voice Dropdown" class="tts-voice-dropdown" />
-            <appui:Spacer />
-            <appui:ActionButton name="Generate Button" class="tts-generate-button" label="Generate" />
-            <appui:Spacer />
-            <engine:Instance template="AudioPlayer" name="Audio Player Template" />
+            <appui:TextArea name="Input Area" class="tts-input-area" placeholder="Enter your text here..."/>
+            <appui:Spacer/>
+            <appui:TouchSliderFloat name="Speed Slider" class="tts-speed-slider" label="Speed" low-value="0.5"
+                                    high-value="2.0" value="1.0"/>
+            <appui:Spacer/>
+            <appui:Dropdown name="Voice Dropdown" class="tts-voice-dropdown"/>
+            <appui:Spacer/>
+            <appui:ActionButton name="Generate Button" class="tts-generate-button" label="Generate"/>
+            <appui:Spacer/>
+            <engine:Instance template="AudioPlayer" name="Audio Player Template"/>
         </tts:App>
     </appui:Panel>
 

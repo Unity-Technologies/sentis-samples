@@ -1,10 +1,12 @@
+using System;
 using System.Threading.Tasks;
-using Unity.InferenceEngine.Samples.TTS.State;
-using UnityEngine.UIElements;
-using Unity.AppUI.UI;
-using Unity.InferenceEngine.Samples.TTS.Utils;
-using UnityEngine;
 using Unity.AppUI.Redux;
+using Unity.AppUI.UI;
+using Unity.InferenceEngine.Samples.TTS.State;
+using Unity.InferenceEngine.Samples.TTS.Utils;
+using UnityEditor;
+using UnityEngine;
+using UnityEngine.UIElements;
 
 namespace Unity.InferenceEngine.Samples.TTS.UI
 {
@@ -121,7 +123,7 @@ namespace Unity.InferenceEngine.Samples.TTS.UI
         {
             #if UNITY_EDITOR
             //Open save file dialog
-            var path = UnityEditor.EditorUtility.SaveFilePanel("Save Audio", "", "audio.wav", "wav");
+            var path = EditorUtility.SaveFilePanel("Save Audio", "", "audio.wav", "wav");
             if (string.IsNullOrEmpty(path))
                 return;
 

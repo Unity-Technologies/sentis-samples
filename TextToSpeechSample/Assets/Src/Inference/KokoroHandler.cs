@@ -4,7 +4,6 @@ using System.IO;
 using System.Threading.Tasks;
 using Unity.InferenceEngine.Samples.TTS.Assets;
 using Unity.InferenceEngine.Samples.TTS.Utils;
-using UnityEditor;
 using UnityEngine;
 
 namespace Unity.InferenceEngine.Samples.TTS.Inference

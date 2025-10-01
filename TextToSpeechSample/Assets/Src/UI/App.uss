@@ -1,18 +1,18 @@
-.tts-app{
+.tts-app {
     flex-grow: 1;
     padding: var(--appui-spacing-300);
 }
 
-.tts-input-area{
+.tts-input-area {
     flex-grow: 1;
 }
 
-.horizontal-container{
+.horizontal-container {
     flex-direction: row;
 }
 
-.tts-voice-dropdown{
+.tts-voice-dropdown {
 }
 
-.tts-speed-slider{
+.tts-speed-slider {
 }

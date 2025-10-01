@@ -1,11 +1,11 @@
+using System;
 using System.Collections.Generic;
 using Unity.AppUI.Redux;
 using Unity.AppUI.UI;
 using Unity.InferenceEngine.Samples.TTS.Inference;
 using Unity.InferenceEngine.Samples.TTS.State;
-using UnityEngine.UIElements;
-using System;
 using UnityEngine;
+using UnityEngine.UIElements;
 
 namespace Unity.InferenceEngine.Samples.TTS.UI
 {

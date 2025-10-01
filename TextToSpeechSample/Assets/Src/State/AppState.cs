@@ -11,10 +11,10 @@ namespace Unity.InferenceEngine.Samples.TTS.State
         public KokoroHandler KokoroHandler;
         public KokoroHandler.Voice Voice = null;
         public float Speed = 1.0f;
-        public Tensor<float> Waveform = null;
+        public Tensor<float> Waveform;
         public AudioClip AudioClip = null;
         public GenerationStatus Status = GenerationStatus.Idle;
-        public string Error = null;
+        public string Error;
 
         public const string ModelId = "onnx-community/Kokoro-82M-v1.0-ONNX";
         public const string OnnxPath = "onnx/model.onnx";

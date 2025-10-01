@@ -1,3 +1,5 @@
+using System;
+
 namespace Unity.InferenceEngine.Samples.TTS.State
 {
     public static class AppSlice

@@ -1,13 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
 
 <ui:UXML
-    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-    xmlns:ui="UnityEngine.UIElements"
-    xmlns:appui="Unity.AppUI.UI"
-    xmlns:network="Unity.InferenceEngine.Samples.TTS.UI.Network"
-    xsi:noNamespaceSchemaLocation="../../../../../../../../UIElementsSchema/UIElements.xsd">
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xmlns:ui="UnityEngine.UIElements"
+        xmlns:appui="Unity.AppUI.UI"
+        xmlns:network="Unity.InferenceEngine.Samples.TTS.UI.Network"
+        xsi:noNamespaceSchemaLocation="../../../../../../../../UIElementsSchema/UIElements.xsd">
     <ui:Style
-        src="project://database/Packages/com.unity.dt.app-ui/PackageResources/Styles/Themes/App UI - Editor Dark - Small.tss"/>
+            src="project://database/Packages/com.unity.dt.app-ui/PackageResources/Styles/Themes/App UI - Editor Dark - Small.tss"/>
     <ui:Style src="ModelDownloaderWindow.uss"/>
     <appui:Panel>
         <network:ModelDownloaderWindow/>
