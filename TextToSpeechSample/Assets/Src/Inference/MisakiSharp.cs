@@ -2,171 +2,53 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text.RegularExpressions;
-using System.Globalization;
-using UnityEngine;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
+using UnityEngine;
 
 namespace Unity.InferenceEngine.Samples.TTS.Inference
 {
     public class MToken
     {
-        public string Text { get; set; } = "";
-        public string Tag { get; set; } = "";
-        public string Whitespace { get; set; } = "";
-        public string Phonemes { get; set; }
-        public float StartTs { get; set; }
-        public float EndTs { get; set; }
-        public int Rating { get; set; }
-        public TokenUnderscore _ { get; set; } = new TokenUnderscore();
-
-        public class TokenUnderscore
-        {
-            public bool IsHead { get; set; } = true;
-            public string Alias { get; set; }
-            public float? Stress { get; set; }
-            public string Currency { get; set; }
-            public string NumFlags { get; set; } = "";
-            public bool Prespace { get; set; }
-            public int? Rating { get; set; }
-        }
+        public string Text { get; init; } = "";
+        public string Tag { get; init; } = "";
     }
 
     public class TokenContext
     {
         public bool? FutureVowel { get; set; }
-        public bool FutureTo { get; set; }
     }
 
     public static class MisakiSharp
     {
         // Character sets
-        private static readonly HashSet<char> DIPHTHONGS = new HashSet<char>("AIOQWYʤʧ".ToCharArray());
-        private static readonly HashSet<char> CONSONANTS = new HashSet<char>("bdfhjklmnpstvwzðŋɡɹɾʃʒʤʧθ".ToCharArray());
-        private static readonly HashSet<char> VOWELS = new HashSet<char>("AIOQWYaiuæɑɒɔəɛɜɪʊʌᵻ".ToCharArray());
-        private static readonly HashSet<char> PUNCTS = new HashSet<char>(";:,.!?—…\"\"\"".ToCharArray());
-        private static readonly HashSet<char> NON_QUOTE_PUNCTS = new HashSet<char>(PUNCTS.Where(p => p != '\"' && p != '\"' && p != '\"').ToArray());
-        private static readonly HashSet<string> PUNCT_TAGS = new HashSet<string> { ".", ",", "-LRB-", "-RRB-", "``", "\"\"", "''", ":", "$", "#", "NFP" };
+        static readonly HashSet<char> k_Consonants = new("bdfhjklmnpstvwzðŋɡɹɾʃʒʤʧθ".ToCharArray());
+        static readonly HashSet<char> k_Vowels = new("AIOQWYaiuæɑɒɔəɛɜɪʊʌᵻ".ToCharArray());
+        static readonly HashSet<char> k_Puncts = new(";:,.!?—…\"\"\"".ToCharArray());
+        static readonly HashSet<char> k_NonQuotePuncts = new(k_Puncts.Where(p => p != '\"' && p != '\"' && p != '\"').ToArray());
+        static readonly HashSet<string> k_PunctTags = new() { ".", ",", "-LRB-", "-RRB-", "``", "\"\"", "''", ":", "$", "#", "NFP" };
 
         // Lexicon dictionaries
-        private static Dictionary<string, object> _goldDictionary;
-        private static Dictionary<string, string> _silverDictionary;
-        private static bool _dictionariesLoaded = false;
+        static Dictionary<string, object> s_GoldDictionary;
+        static Dictionary<string, string> s_SilverDictionary;
+        static bool s_DictionariesLoaded;
 
         // Lexicon constants
-        private static readonly HashSet<int> LEXICON_ORDS = new HashSet<int>(new[] { 39, 45 }.Concat(Enumerable.Range(65, 26)).Concat(Enumerable.Range(97, 26)));
-        private static readonly HashSet<char> US_TAUS = new HashSet<char>("AIOWYiuæɑəɛɪɹʊʌ".ToCharArray());
-        private static readonly Dictionary<string, (string, string)> CURRENCIES = new Dictionary<string, (string, string)>
-        {
-            { "$", ("dollar", "cent") },
-            { "£", ("pound", "pence") },
-            { "€", ("euro", "cent") }
-        };
-        private static readonly HashSet<string> ORDINALS = new HashSet<string> { "st", "nd", "rd", "th" };
-        private static readonly Dictionary<string, string> ADD_SYMBOLS = new Dictionary<string, string> { { ".", "dot" }, { "/", "slash" } };
+        static readonly HashSet<int> k_LexiconOrds = new(new[] { 39, 45 }.Concat(Enumerable.Range(65, 26)).Concat(Enumerable.Range(97, 26)));
+        static readonly HashSet<char> k_UsTaus = new("AIOWYiuæɑəɛɪɹʊʌ".ToCharArray());
+        static readonly Dictionary<string, string> k_AddSymbols = new() { { ".", "dot" }, { "/", "slash" } };
 
         // Stress markers
-        private const char PRIMARY_STRESS = 'ˈ';
-        private const char SECONDARY_STRESS = 'ˌ';
-        private static readonly string STRESSES = new string(new[] { SECONDARY_STRESS, PRIMARY_STRESS });
+        const char k_PrimaryStress = 'ˈ';
+        const char k_SecondaryStress = 'ˌ';
 
         // Phoneme vocabulary for tokenization
-        private static readonly Dictionary<char, int> PhonemeVocab = new Dictionary<char, int>
+        static readonly Dictionary<char, int> k_PhonemeVocab = new()
         {
             ['\n'] = -1, ['$'] = 0, [';'] = 1, [':'] = 2, [','] = 3, ['.'] = 4, ['!'] = 5, ['?'] = 6, ['¡'] = 7, ['¿'] = 8, ['—'] = 9, ['…'] = 10, ['\"'] = 11, ['('] = 12, [')'] = 13, ['"'] = 14, ['"'] = 15, [' '] = 16, ['\u0303'] = 17, ['ʣ'] = 18, ['ʥ'] = 19, ['ʦ'] = 20, ['ʨ'] = 21, ['ᵝ'] = 22, ['\uAB67'] = 23, ['A'] = 24, ['I'] = 25, ['O'] = 31, ['Q'] = 33, ['S'] = 35, ['T'] = 36, ['W'] = 39, ['Y'] = 41, ['ᵊ'] = 42, ['a'] = 43, ['b'] = 44, ['c'] = 45, ['d'] = 46, ['e'] = 47, ['f'] = 48, ['h'] = 50, ['i'] = 51, ['j'] = 52, ['k'] = 53, ['l'] = 54, ['m'] = 55, ['n'] = 56, ['o'] = 57, ['p'] = 58, ['q'] = 59, ['r'] = 60, ['s'] = 61, ['t'] = 62, ['u'] = 63, ['v'] = 64, ['w'] = 65, ['x'] = 66, ['y'] = 67, ['z'] = 68, ['ɑ'] = 69, ['ɐ'] = 70, ['ɒ'] = 71, ['æ'] = 72, ['β'] = 75, ['ɔ'] = 76, ['ɕ'] = 77, ['ç'] = 78, ['ɖ'] = 80, ['ð'] = 81, ['ʤ'] = 82, ['ə'] = 83, ['ɚ'] = 85, ['ɛ'] = 86, ['ɜ'] = 87, ['ɟ'] = 90, ['ɡ'] = 92, ['ɥ'] = 99, ['ɨ'] = 101, ['ɪ'] = 102, ['ʝ'] = 103, ['ɯ'] = 110, ['ɰ'] = 111, ['ŋ'] = 112, ['ɳ'] = 113, ['ɲ'] = 114, ['ɴ'] = 115, ['ø'] = 116, ['ɸ'] = 118, ['θ'] = 119, ['œ'] = 120, ['ɹ'] = 123, ['ɾ'] = 125, ['ɻ'] = 126, ['ʁ'] = 128, ['ɽ'] = 129, ['ʂ'] = 130, ['ʃ'] = 131, ['ʈ'] = 132, ['ʧ'] = 133, ['ʊ'] = 135, ['ʋ'] = 136, ['ʌ'] = 138, ['ɣ'] = 139, ['ɤ'] = 140, ['χ'] = 142, ['ʎ'] = 143, ['ʒ'] = 147, ['ʔ'] = 148, ['ˈ'] = 156, ['ˌ'] = 157, ['ː'] = 158, ['ʰ'] = 162, ['ʲ'] = 164, ['↓'] = 169, ['→'] = 171, ['↗'] = 172, ['↘'] = 173, ['ᵻ'] = 177
         };
 
-        // Common word dictionaries (simplified subset)
-        private static readonly Dictionary<string, string> COMMON_WORDS = new Dictionary<string, string>
-        {
-            { "the", "ðə" }, { "The", "ðə" },
-            { "a", "ɐ" }, { "A", "ɐ" },
-            { "an", "ɐn" }, { "An", "ɐn" },
-            { "to", "tə" }, { "To", "tə" },
-            { "in", "ɪn" }, { "In", "ɪn" },
-            { "of", "əv" }, { "Of", "əv" },
-            { "and", "ænd" }, { "And", "ænd" },
-            { "is", "ɪz" }, { "Is", "ɪz" },
-            { "it", "ɪt" }, { "It", "ɪt" },
-            { "you", "ju" }, { "You", "ju" },
-            { "that", "ðæt" }, { "That", "ðæt" },
-            { "he", "hi" }, { "He", "hi" },
-            { "was", "wəz" }, { "Was", "wəz" },
-            { "for", "fɔɹ" }, { "For", "fɔɹ" },
-            { "are", "ɑɹ" }, { "Are", "ɑɹ" },
-            { "with", "wɪθ" }, { "With", "wɪθ" },
-            { "his", "hɪz" }, { "His", "hɪz" },
-            { "they", "ðeɪ" }, { "They", "ðeɪ" },
-            { "at", "æt" }, { "At", "æt" },
-            { "be", "bi" }, { "Be", "bi" },
-            { "this", "ðɪs" }, { "This", "ðɪs" },
-            { "have", "hæv" }, { "Have", "hæv" },
-            { "from", "fɹəm" }, { "From", "fɹəm" },
-            { "or", "ɔɹ" }, { "Or", "ɔɹ" },
-            { "one", "wʌn" }, { "One", "wʌn" },
-            { "had", "hæd" }, { "Had", "hæd" },
-            { "by", "baɪ" }, { "By", "baɪ" },
-            { "not", "nɑt" }, { "Not", "nɑt" },
-            { "what", "wʌt" }, { "What", "wʌt" },
-            { "all", "ɔl" }, { "All", "ɔl" },
-            { "were", "wɜɹ" }, { "Were", "wɜɹ" },
-            { "we", "wi" }, { "We", "wi" },
-            { "when", "wen" }, { "When", "wen" },
-            { "your", "jʊɹ" }, { "Your", "jʊɹ" },
-            { "can", "kæn" }, { "Can", "kæn" },
-            { "said", "sed" }, { "Said", "sed" },
-            { "there", "ðeɹ" }, { "There", "ðeɹ" },
-            { "each", "itʃ" }, { "Each", "itʃ" },
-            { "which", "wɪtʃ" }, { "Which", "wɪtʃ" },
-            { "do", "du" }, { "Do", "du" },
-            { "how", "haʊ" }, { "How", "haʊ" },
-            { "their", "ðeɹ" }, { "Their", "ðeɹ" },
-            { "if", "ɪf" }, { "If", "ɪf" },
-            { "will", "wɪl" }, { "Will", "wɪl" },
-            { "up", "ʌp" }, { "Up", "ʌp" },
-            { "other", "ʌðɜɹ" }, { "Other", "ʌðɜɹ" },
-            { "about", "əbaʊt" }, { "About", "əbaʊt" },
-            { "out", "aʊt" }, { "Out", "aʊt" },
-            { "many", "mɛni" }, { "Many", "mɛni" },
-            { "then", "ðɛn" }, { "Then", "ðɛn" },
-            { "them", "ðɛm" }, { "Them", "ðɛm" },
-            { "these", "ðiz" }, { "These", "ðiz" },
-            { "so", "soʊ" }, { "So", "soʊ" },
-            { "some", "sʌm" }, { "Some", "sʌm" },
-            { "her", "hɜɹ" }, { "Her", "hɜɹ" },
-            { "would", "wʊd" }, { "Would", "wʊd" },
-            { "make", "meɪk" }, { "Make", "meɪk" },
-            { "like", "laɪk" }, { "Like", "laɊk" },
-            { "into", "ɪntu" }, { "Into", "ɪntu" },
-            { "him", "hɪm" }, { "Him", "hɪm" },
-            { "has", "hæz" }, { "Has", "hæz" },
-            { "two", "tu" }, { "Two", "tu" },
-            { "more", "mɔɹ" }, { "More", "mɔɹ" },
-            { "go", "goʊ" }, { "Go", "goʊ" },
-            { "no", "noʊ" }, { "No", "noʊ" },
-            { "way", "weɪ" }, { "Way", "weɪ" },
-            { "could", "kʊd" }, { "Could", "kʊd" },
-            { "my", "maɪ" }, { "My", "maɪ" },
-            { "than", "ðæn" }, { "Than", "ðæn" },
-            { "first", "fɜɹst" }, { "First", "fɜɹst" },
-            { "been", "bɪn" }, { "Been", "bɪn" },
-            { "call", "kɔl" }, { "Call", "kɔl" },
-            { "who", "hu" }, { "Who", "hu" },
-            { "its", "ɪts" }, { "Its", "ɪts" },
-            { "now", "naʊ" }, { "Now", "naʊ" },
-            { "find", "faɪnd" }, { "Find", "faɪnd" },
-            { "long", "lɔŋ" }, { "Long", "lɔŋ" },
-            { "down", "daʊn" }, { "Down", "daʊn" },
-            { "day", "deɪ" }, { "Day", "deɪ" },
-            { "did", "dɪd" }, { "Did", "dɪd" },
-            { "get", "ɡɛt" }, { "Get", "ɡɛt" },
-            { "come", "kʌm" }, { "Come", "kʌm" },
-            { "made", "meɪd" }, { "Made", "meɪd" },
-            { "may", "meɪ" }, { "May", "meɪ" },
-            { "part", "pɑɹt" }, { "Part", "pɑɹt" }
-        };
-
-        private static readonly Dictionary<string, string> SYMBOLS = new Dictionary<string, string>
+        static readonly Dictionary<string, string> k_Symbols = new()
         {
             { "%", "percent" },
             { "&", "and" },
@@ -174,9 +56,9 @@ namespace Unity.InferenceEngine.Samples.TTS.Inference
             { "@", "at" }
         };
 
-        private static void LoadDictionaries()
+        static void LoadDictionaries()
         {
-            if (_dictionariesLoaded) return;
+            if (s_DictionariesLoaded) return;
 
             try
             {
@@ -184,55 +66,55 @@ namespace Unity.InferenceEngine.Samples.TTS.Inference
                 var goldTextAsset = Resources.Load<TextAsset>("us_gold");
                 if (goldTextAsset != null)
                 {
-                    _goldDictionary = JsonConvert.DeserializeObject<Dictionary<string, object>>(goldTextAsset.text);
+                    s_GoldDictionary = JsonConvert.DeserializeObject<Dictionary<string, object>>(goldTextAsset.text);
                 }
                 else
                 {
                     Debug.LogError("Failed to load us_gold.json from Resources");
-                    _goldDictionary = new Dictionary<string, object>();
+                    s_GoldDictionary = new Dictionary<string, object>();
                 }
 
                 // Load silver dictionary
                 var silverTextAsset = Resources.Load<TextAsset>("us_silver");
                 if (silverTextAsset != null)
                 {
-                    _silverDictionary = JsonConvert.DeserializeObject<Dictionary<string, string>>(silverTextAsset.text);
+                    s_SilverDictionary = JsonConvert.DeserializeObject<Dictionary<string, string>>(silverTextAsset.text);
                 }
                 else
                 {
                     Debug.LogError("Failed to load us_silver.json from Resources");
-                    _silverDictionary = new Dictionary<string, string>();
+                    s_SilverDictionary = new Dictionary<string, string>();
                 }
 
-                _dictionariesLoaded = true;
+                s_DictionariesLoaded = true;
             }
             catch (Exception ex)
             {
                 Debug.LogError($"Failed to load dictionaries: {ex.Message}");
-                _goldDictionary = new Dictionary<string, object>();
-                _silverDictionary = new Dictionary<string, string>();
-                _dictionariesLoaded = true;
+                s_GoldDictionary = new Dictionary<string, object>();
+                s_SilverDictionary = new Dictionary<string, string>();
+                s_DictionariesLoaded = true;
             }
         }
 
         public static int[] TokenizeGraphemes(string inputText)
         {
             if (string.IsNullOrEmpty(inputText))
-                return new int[0];
+                return Array.Empty<int>();
 
             var phonemes = TextToPhonemes(inputText);
             return Tokenize(phonemes);
         }
 
-        public static int[] Tokenize(string phonemes)
+        static int[] Tokenize(string phonemes)
         {
             if (string.IsNullOrEmpty(phonemes))
-                return new int[0];
+                return Array.Empty<int>();
 
             var tokens = new List<int>();
-            foreach (var character in phonemes.ToCharArray())
+            foreach (var character in phonemes)
             {
-                if (!PhonemeVocab.TryGetValue(character, out var value))
+                if (!k_PhonemeVocab.TryGetValue(character, out var value))
                 {
                     Debug.LogWarning($"Character '{character}' not in vocabulary, skipping.");
                     continue;
@@ -260,14 +142,14 @@ namespace Unity.InferenceEngine.Samples.TTS.Inference
                 if (!string.IsNullOrEmpty(phonemes))
                 {
                     result.Add(phonemes);
-                    UpdateContext(context, phonemes, token);
+                    UpdateContext(context, phonemes);
                 }
             }
 
             return string.Join(" ", result);
         }
 
-        private static List<MToken> SimpleTokenize(string text)
+        static List<MToken> SimpleTokenize(string text)
         {
             var tokens = new List<MToken>();
 
@@ -295,7 +177,6 @@ namespace Unity.InferenceEngine.Samples.TTS.Inference
                         var token = new MToken
                         {
                             Text = cleanWord,
-                            Whitespace = (i == words.Length - 1 && cleanWord == cleanedWords.Last()) ? "" : " ",
                             Tag = GetSimpleTag(cleanWord)
                         };
                         tokens.Add(token);
@@ -306,7 +187,7 @@ namespace Unity.InferenceEngine.Samples.TTS.Inference
             return tokens;
         }
 
-        private static List<string> SplitWordWithPunctuation(string word)
+        static List<string> SplitWordWithPunctuation(string word)
         {
             var result = new List<string>();
 
@@ -351,16 +232,16 @@ namespace Unity.InferenceEngine.Samples.TTS.Inference
             return result.Where(s => !string.IsNullOrEmpty(s)).ToList();
         }
 
-        private static bool IsContraction(string word)
+        static bool IsContraction(string word)
         {
-            // Check if word contains apostrophe and looks like a contraction/possessive
+            // Check if the word contains apostrophe and looks like a contraction/possessive
             return (word.Contains("'") || word.Contains("'") || word.Contains("\u2019")) &&
                    word.Length > 2 &&
-                   !word.StartsWith("'") && !word.StartsWith("'") && !word.StartsWith("\u2019") &&
-                   !word.EndsWith("'") && !word.EndsWith("'") && !word.EndsWith("\u2019");
+                   !word.StartsWith('\'') && !word.StartsWith('\'') && !word.StartsWith('’') &&
+                   !word.EndsWith('\'') && !word.EndsWith('\'') && !word.EndsWith('’');
         }
 
-        private static string GetSimpleTag(string word)
+        static string GetSimpleTag(string word)
         {
             if (string.IsNullOrWhiteSpace(word))
                 return "";
@@ -368,8 +249,8 @@ namespace Unity.InferenceEngine.Samples.TTS.Inference
             word = word.Trim();
 
             // Check for punctuation - including quotes and other symbols
-            if (PUNCT_TAGS.Contains(word) ||
-                PUNCTS.Contains(word.FirstOrDefault()) ||
+            if (k_PunctTags.Contains(word) ||
+                k_Puncts.Contains(word.FirstOrDefault()) ||
                 word.All(c => !char.IsLetterOrDigit(c))) // Any non-alphanumeric character
                 return "PUNCT";
 
@@ -382,7 +263,7 @@ namespace Unity.InferenceEngine.Samples.TTS.Inference
             return "NN";
         }
 
-        private static string GetWordPhonemes(MToken token, TokenContext context)
+        static string GetWordPhonemes(MToken token, TokenContext context)
         {
             var word = token.Text;
 
@@ -390,15 +271,15 @@ namespace Unity.InferenceEngine.Samples.TTS.Inference
                 return "";
 
             // Handle punctuation
-            if (word.Length == 1 && PUNCTS.Contains(word[0]))
+            if (word.Length == 1 && k_Puncts.Contains(word[0]))
             {
                 return GetPunctuationPhonemes(word);
             }
 
             // Handle symbols
-            if (SYMBOLS.ContainsKey(word))
+            if (k_Symbols.TryGetValue(word, out var symbol))
             {
-                return GetWordPhonemes(new MToken { Text = SYMBOLS[word], Tag = "NN" }, context);
+                return GetWordPhonemes(new MToken { Text = symbol, Tag = "NN" }, context);
             }
 
             // Handle numbers
@@ -415,7 +296,7 @@ namespace Unity.InferenceEngine.Samples.TTS.Inference
             }
 
             // Try lexicon lookup
-            var (phonemes, rating) = LookupWord(word, token.Tag, null, context);
+            var (phonemes, _) = LookupWord(word, token.Tag, null, context);
             if (!string.IsNullOrEmpty(phonemes))
             {
                 return phonemes;
@@ -430,7 +311,7 @@ namespace Unity.InferenceEngine.Samples.TTS.Inference
             return "";
         }
 
-        private static string GetPunctuationPhonemes(string punct)
+        static string GetPunctuationPhonemes(string punct)
         {
             switch (punct)
             {
@@ -450,7 +331,7 @@ namespace Unity.InferenceEngine.Samples.TTS.Inference
             }
         }
 
-        private static string GetNumberPhonemes(string number)
+        static string GetNumberPhonemes(string number)
         {
             // Simple number to word conversion for basic cases
             var dict = new Dictionary<string, string>
@@ -460,10 +341,10 @@ namespace Unity.InferenceEngine.Samples.TTS.Inference
                 { "8", "eɪt" }, { "9", "naɪn" }, { "10", "tɛn" }
             };
 
-            if (dict.ContainsKey(number))
-                return dict[number];
+            if (dict.TryGetValue(number, out var numberPhonemes))
+                return numberPhonemes;
 
-            // For larger numbers, try to convert to words and lookup each word
+            // For larger numbers, try to convert to words and look up each word
             var numberWord = ConvertNumberToWords(int.Parse(number));
             if (!string.IsNullOrEmpty(numberWord))
             {
@@ -496,7 +377,7 @@ namespace Unity.InferenceEngine.Samples.TTS.Inference
             return "";
         }
 
-        private static string ConvertNumberToWords(int number)
+        static string ConvertNumberToWords(int number)
         {
             if (number < 0) return "minus " + ConvertNumberToWords(-number);
             if (number == 0) return "zero";
@@ -507,7 +388,7 @@ namespace Unity.InferenceEngine.Samples.TTS.Inference
             return "";
         }
 
-        private static string HandleContractions(string word)
+        static string HandleContractions(string word)
         {
             // Normalize Unicode apostrophes to ASCII apostrophes
             word = word.Replace("\u2019", "'").Replace("'", "'");
@@ -559,15 +440,13 @@ namespace Unity.InferenceEngine.Samples.TTS.Inference
             };
 
             // Check direct contraction first
-            if (contractions.ContainsKey(word))
-                return contractions[word];
+            if (contractions.TryGetValue(word, out var handleContractions))
+                return handleContractions;
 
-            // Handle general 's pattern for words not in the contractions list
+            // Handle general's pattern for words not in the contraction list
             if (word.EndsWith("'s") || word.EndsWith("'s") || word.EndsWith("\u2019s"))
             {
-                var baseWord = word.EndsWith("'s") ? word.Substring(0, word.Length - 2) :
-                              word.EndsWith("'s") ? word.Substring(0, word.Length - 2) :
-                              word.Substring(0, word.Length - 2);
+                var baseWord = word.Substring(0, word.Length - 2);
 
                 // Try to look up the base word and add "s" sound
                 var (basePhonemes, _) = LookupWord(baseWord, "NN", null, new TokenContext());
@@ -580,21 +459,17 @@ namespace Unity.InferenceEngine.Samples.TTS.Inference
             return null;
         }
 
-        private static (string, int) LookupWord(string word, string tag, float? stress, TokenContext context)
+        static (string, int) LookupWord(string word, string tag, float? stress, TokenContext context)
         {
             if (string.IsNullOrEmpty(word))
                 return ("", 0);
 
             // Handle special cases first
-            var specialCase = GetSpecialCase(word, tag, stress, context);
+            var specialCase = GetSpecialCase(word, tag, context);
             if (!string.IsNullOrEmpty(specialCase.Item1))
                 return specialCase;
 
-            var isNNP = false;
-            var originalWord = word;
-            var lookupWord = word;
-
-            // Handle case variations - try original case first, then lowercase
+            // Handle case variations - try an original case first, then lowercase
             var casesToTry = new List<string>();
             casesToTry.Add(word);
             if (word != word.ToLower())
@@ -605,9 +480,8 @@ namespace Unity.InferenceEngine.Samples.TTS.Inference
             foreach (var caseVariant in casesToTry)
             {
                 // Try gold dictionary first
-                if (_goldDictionary.ContainsKey(caseVariant))
+                if (s_GoldDictionary.TryGetValue(caseVariant, out var entry))
                 {
-                    var entry = _goldDictionary[caseVariant];
                     string phonemes = null;
                     int rating = 4;
 
@@ -618,13 +492,13 @@ namespace Unity.InferenceEngine.Samples.TTS.Inference
                     else if (entry is JObject complexEntry)
                     {
                         // Handle complex entries with multiple POS tags
-                        if (!string.IsNullOrEmpty(tag) && complexEntry.ContainsKey(tag))
+                        if (!string.IsNullOrEmpty(tag) && complexEntry.TryGetValue(tag, out var value))
                         {
-                            phonemes = complexEntry[tag]?.ToString();
+                            phonemes = value?.ToString();
                         }
-                        else if (complexEntry.ContainsKey("DEFAULT"))
+                        else if (complexEntry.TryGetValue("DEFAULT", out var value1))
                         {
-                            phonemes = complexEntry["DEFAULT"]?.ToString();
+                            phonemes = value1?.ToString();
                         }
                         else
                         {
@@ -641,10 +515,9 @@ namespace Unity.InferenceEngine.Samples.TTS.Inference
                 }
 
                 // Try silver dictionary if not found in gold and not a proper noun
-                if (!isNNP && _silverDictionary.ContainsKey(caseVariant))
+                if (s_SilverDictionary.TryGetValue(caseVariant, out var phonemes1))
                 {
-                    var phonemes = _silverDictionary[caseVariant];
-                    return (ApplyStress(phonemes, stress), 3);
+                    return (ApplyStress(phonemes1, stress), 3);
                 }
             }
 
@@ -657,18 +530,18 @@ namespace Unity.InferenceEngine.Samples.TTS.Inference
             return ("", 0);
         }
 
-        private static (string, int) GetSpecialCase(string word, string tag, float? stress, TokenContext context)
+        static (string, int) GetSpecialCase(string word, string tag, TokenContext context)
         {
             // Handle ADD symbols
-            if (tag == "ADD" && ADD_SYMBOLS.ContainsKey(word))
+            if (tag == "ADD" && k_AddSymbols.TryGetValue(word, out var symbol))
             {
-                return LookupWord(ADD_SYMBOLS[word], null, -0.5f, context);
+                return LookupWord(symbol, null, -0.5f, context);
             }
 
             // Handle general symbols
-            if (SYMBOLS.ContainsKey(word))
+            if (k_Symbols.TryGetValue(word, out var symbol1))
             {
-                return LookupWord(SYMBOLS[word], null, null, context);
+                return LookupWord(symbol1, null, null, context);
             }
 
             // Handle contextual words like "the", "a", "to"
@@ -689,20 +562,20 @@ namespace Unity.InferenceEngine.Samples.TTS.Inference
                     return ("ɐn", 4);
                 case "in":
                 case "In":
-                    var stress_marker = context.FutureVowel == null || tag != "IN" ? "ˈ" : "";
-                    return (stress_marker + "ɪn", 4);
+                    var stressMarker = context.FutureVowel == null || tag != "IN" ? "ˈ" : "";
+                    return (stressMarker + "ɪn", 4);
             }
 
             return ("", 0);
         }
 
-        private static (string, int) TryMorphologicalLookup(string word, string tag, float? stress, TokenContext context)
+        static (string, int) TryMorphologicalLookup(string word, string tag, float? stress, TokenContext context)
         {
             // Try -s suffix (plurals, verb conjugations)
-            if (word.Length > 2 && word.EndsWith("s") && !word.EndsWith("ss"))
+            if (word.Length > 2 && word.EndsWith('s') && !word.EndsWith("ss"))
             {
                 var stem = word.Substring(0, word.Length - 1);
-                if (IsKnown(stem, tag))
+                if (IsKnown(stem))
                 {
                     var (stemPhonemes, rating) = LookupWord(stem, tag, stress, context);
                     if (!string.IsNullOrEmpty(stemPhonemes))
@@ -716,7 +589,7 @@ namespace Unity.InferenceEngine.Samples.TTS.Inference
             if (word.Length > 3 && word.EndsWith("ed") && !word.EndsWith("eed"))
             {
                 var stem = word.Substring(0, word.Length - 2);
-                if (IsKnown(stem, tag))
+                if (IsKnown(stem))
                 {
                     var (stemPhonemes, rating) = LookupWord(stem, tag, stress, context);
                     if (!string.IsNullOrEmpty(stemPhonemes))
@@ -726,11 +599,11 @@ namespace Unity.InferenceEngine.Samples.TTS.Inference
                 }
             }
 
-            // Try -ing suffix
+            // Try-ing suffix
             if (word.Length > 4 && word.EndsWith("ing"))
             {
                 var stem = word.Substring(0, word.Length - 3);
-                if (IsKnown(stem, tag))
+                if (IsKnown(stem))
                 {
                     var (stemPhonemes, rating) = LookupWord(stem, tag, 0.5f, context);
                     if (!string.IsNullOrEmpty(stemPhonemes))
@@ -743,91 +616,79 @@ namespace Unity.InferenceEngine.Samples.TTS.Inference
             return ("", 0);
         }
 
-        private static bool IsKnown(string word, string tag)
+        static bool IsKnown(string word)
         {
-            if (_goldDictionary.ContainsKey(word) || SYMBOLS.ContainsKey(word) || _silverDictionary.ContainsKey(word))
+            if (s_GoldDictionary.ContainsKey(word) || k_Symbols.ContainsKey(word) || s_SilverDictionary.ContainsKey(word))
                 return true;
 
-            if (!word.All(c => char.IsLetter(c) && LEXICON_ORDS.Contains(c)))
+            if (!word.All(c => char.IsLetter(c) && k_LexiconOrds.Contains(c)))
                 return false;
 
             if (word.Length == 1)
                 return true;
 
-            if (word == word.ToUpper() && _goldDictionary.ContainsKey(word.ToLower()))
+            if (word == word.ToUpper() && s_GoldDictionary.ContainsKey(word.ToLower()))
                 return true;
 
             return word.Substring(1) == word.Substring(1).ToUpper();
         }
 
-        private static string ApplySSuffix(string stem)
+        static string ApplySSuffix(string stem)
         {
             if (string.IsNullOrEmpty(stem)) return null;
 
             var lastChar = stem.LastOrDefault();
             if ("ptkfθ".Contains(lastChar))
                 return stem + "s";
-            else if ("szʃʒʧʤ".Contains(lastChar))
+            if ("szʃʒʧʤ".Contains(lastChar))
                 return stem + "ɪz"; // Using US pronunciation
-            else
-                return stem + "z";
+            return stem + "z";
         }
 
-        private static string ApplyEdSuffix(string stem)
+        static string ApplyEdSuffix(string stem)
         {
             if (string.IsNullOrEmpty(stem)) return null;
 
             var lastChar = stem.LastOrDefault();
             if ("pkfθʃsʧ".Contains(lastChar))
                 return stem + "t";
-            else if (lastChar == 'd')
+            if (lastChar == 'd')
                 return stem + "ɪd"; // Using US pronunciation
-            else if (lastChar != 't')
+            if (lastChar != 't')
                 return stem + "d";
-            else if (stem.Length >= 2 && US_TAUS.Contains(stem[stem.Length - 2]))
+            if (stem.Length >= 2 && k_UsTaus.Contains(stem[^2]))
                 return stem.Substring(0, stem.Length - 1) + "ɾᵻd";
-            else
-                return stem + "ᵻd";
+            return stem + "ᵻd";
         }
 
-        private static string ApplyIngSuffix(string stem)
+        static string ApplyIngSuffix(string stem)
         {
             if (string.IsNullOrEmpty(stem)) return null;
 
-            if (stem.Length > 1 && stem.LastOrDefault() == 't' && US_TAUS.Contains(stem[stem.Length - 2]))
+            if (stem.Length > 1 && stem.LastOrDefault() == 't' && k_UsTaus.Contains(stem[^2]))
                 return stem.Substring(0, stem.Length - 1) + "ɾɪŋ";
-            else
-                return stem + "ɪŋ";
+            return stem + "ɪŋ";
         }
 
-        private static void UpdateContext(TokenContext context, string phonemes, MToken token)
+        static void UpdateContext(TokenContext context, string phonemes)
         {
             // Update context based on current phonemes
             if (!string.IsNullOrEmpty(phonemes))
             {
                 var firstSoundChar = phonemes.FirstOrDefault(c =>
-                    VOWELS.Contains(c) || CONSONANTS.Contains(c) || NON_QUOTE_PUNCTS.Contains(c));
+                    k_Vowels.Contains(c) || k_Consonants.Contains(c) || k_NonQuotePuncts.Contains(c));
 
-                if (firstSoundChar != default)
+                if (firstSoundChar != 0)
                 {
-                    context.FutureVowel = VOWELS.Contains(firstSoundChar) ? (bool?)true :
-                                        NON_QUOTE_PUNCTS.Contains(firstSoundChar) ? null : false;
+                    if (k_Vowels.Contains(firstSoundChar))
+                        context.FutureVowel = true;
+                    else
+                        context.FutureVowel = k_NonQuotePuncts.Contains(firstSoundChar) ? null : false;
                 }
             }
-
-            var word = token.Text.ToLower();
-            context.FutureTo = word == "to" || (word == "TO" && (token.Tag == "TO" || token.Tag == "IN"));
         }
 
-        private static int StressWeight(string phonemes)
-        {
-            if (string.IsNullOrEmpty(phonemes))
-                return 0;
-
-            return phonemes.Sum(c => DIPHTHONGS.Contains(c) ? 2 : 1);
-        }
-
-        private static string ApplyStress(string phonemes, float? stress)
+        static string ApplyStress(string phonemes, float? stress)
         {
             if (string.IsNullOrEmpty(phonemes) || stress == null)
                 return phonemes;
@@ -835,22 +696,22 @@ namespace Unity.InferenceEngine.Samples.TTS.Inference
             // Simplified stress application based on Misaki logic
             if (stress < -1)
             {
-                return phonemes.Replace(PRIMARY_STRESS.ToString(), "").Replace(SECONDARY_STRESS.ToString(), "");
+                return phonemes.Replace(k_PrimaryStress.ToString(), "").Replace(k_SecondaryStress.ToString(), "");
             }
-            else if (stress == -1 || (stress >= 0 && stress < 1 && phonemes.Contains(PRIMARY_STRESS)))
+
+            if (stress == -1 || (stress is >= 0 and < 1 && phonemes.Contains(k_PrimaryStress)))
             {
-                return phonemes.Replace(SECONDARY_STRESS.ToString(), "").Replace(PRIMARY_STRESS.ToString(), SECONDARY_STRESS.ToString());
+                return phonemes.Replace(k_SecondaryStress.ToString(), "").Replace(k_PrimaryStress.ToString(), k_SecondaryStress.ToString());
             }
-            else if (stress >= 1 && !phonemes.Contains(PRIMARY_STRESS) && phonemes.Contains(SECONDARY_STRESS))
+
+            if (stress >= 1 && !phonemes.Contains(k_PrimaryStress) && phonemes.Contains(k_SecondaryStress))
             {
-                return phonemes.Replace(SECONDARY_STRESS.ToString(), PRIMARY_STRESS.ToString());
+                return phonemes.Replace(k_SecondaryStress.ToString(), k_PrimaryStress.ToString());
             }
-            else if (stress > 1 && !phonemes.Contains(PRIMARY_STRESS) && !phonemes.Contains(SECONDARY_STRESS))
+
+            if (stress > 1 && !phonemes.Contains(k_PrimaryStress) && !phonemes.Contains(k_SecondaryStress) && k_Vowels.Any(phonemes.Contains))
             {
-                if (VOWELS.Any(v => phonemes.Contains(v)))
-                {
-                    return PRIMARY_STRESS + phonemes;
-                }
+                return k_PrimaryStress + phonemes;
             }
 
             return phonemes;
