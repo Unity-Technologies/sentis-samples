@@ -10,12 +10,12 @@ namespace Unity.InferenceEngine.Samples.TTS.Editor
         {
             rootVisualElement.Clear();
             rootVisualElement.AddToClassList("unity-editor");
-            titleContent = new GUIContent("Kokoro TTS - Download Files");
+            titleContent = new GUIContent("Kokoro Text-To-Speech - Download Files");
             var visualTreeAsset = AssetDatabase.LoadAssetAtPath<VisualTreeAsset>("Assets/Src/UI/Network/ModelDownloaderWindow.uxml");
             visualTreeAsset.CloneTree(rootVisualElement);
         }
 
-        [MenuItem("Inference Engine/Sample/TTS/Download Models")]
+        [MenuItem("Inference Engine/Sample/Text-To-Speech/Download Models")]
         public static void OpenWindow()
         {
             var window = GetWindow<DownloadEditorWindow>();

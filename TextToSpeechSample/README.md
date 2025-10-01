@@ -1,12 +1,12 @@
 # Text-to-Speech Sample
 
-Interactive text-to-speech interface powered by the Kokoro TTS model running locally in Unity using Inference Engine.
+Interactive interface powered by the Kokoro Text-To-Speech model running locally in Unity using Inference Engine.
 
 ![TTS Interface](Documentation/main.png)
 
 ## Runtime Inference
 
-To power this experience we leverage the [Kokoro-82M-v1.0-ONNX](https://huggingface.co/onnx-community/Kokoro-82M-v1.0-ONNX) model, a high-quality neural text-to-speech model.
+To power this experience we leverage the [Kokoro-82M-v1.0-ONNX](https://huggingface.co/onnx-community/Kokoro-82M-v1.0-ONNX) model, a high-quality text-to-speech model.
 
 The system processes text inputs through:
 - Text tokenization and grapheme-to-phoneme conversion using our C# implementation of Misaki for English
@@ -29,13 +29,13 @@ We use this to create a seamless text-to-speech experience with natural-sounding
 ## Getting Started
 
 1. Open the Unity project
-2. Download models by navigating to **Inference Engine > Sample > TTS > Download Models** in the menu
-3. Navigate to **Inference Engine > Sample > TTS > Start TTS** in the menu
+2. Download models by navigating to **Inference Engine > Sample > Text-To-Speech > Download Models** in the menu
+3. Navigate to **Inference Engine > Sample > Text-To-Speech > Start Kokoro** in the menu
 4. Enter text and generate speech with your chosen voice!
 
 Alternatively, you can use the runtime scene at `TextToSpeechSample/Assets/Scenes/App.unity`, but make sure to download the models beforehand using the editor menu.
 
-The TTS interface supports:
+The Text-To-Speech interface supports:
 - Multi-line text input
 - Voice selection from available models
 - Real-time speech generation
@@ -51,12 +51,12 @@ This sample features a complete C# implementation of dictionary-based grapheme-t
 - **Context-Aware Pronunciation**: Adjusts pronunciation based on surrounding context (e.g., "the" before vowels vs consonants)
 - **No External Dependencies**: Self-contained implementation requiring no external tools or processes
 
-The phoneme conversion system processes text through sophisticated tokenization, dictionary lookup, and fallback mechanisms to ensure accurate pronunciation for the Kokoro TTS model.
+The phoneme conversion system processes text through sophisticated tokenization, dictionary lookup, and fallback mechanisms to ensure accurate pronunciation for the Kokoro Text-To-Speech model.
 
 ## Technical Implementation
 
 The sample demonstrates:
-- Integration of neural TTS models in Unity
+- Integration of Text-To-Speech models in Unity
 - Asynchronous model inference with Kokoro
 - AppUI for modern editor interfaces
 - State management using Redux patterns

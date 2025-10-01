@@ -11,12 +11,12 @@ namespace Unity.InferenceEngine.Samples.TTS.Editor
         {
             rootVisualElement.Clear();
             rootVisualElement.AddToClassList("unity-editor");
-            titleContent = new GUIContent("Kokoro TTS");
+            titleContent = new GUIContent("Kokoro Text-To-Speech");
             var visualTreeAsset = AssetDatabase.LoadAssetAtPath<VisualTreeAsset>("Assets/Src/UI/App.uxml");
             visualTreeAsset.CloneTree(rootVisualElement);
         }
 
-        [MenuItem("Inference Engine/Sample/TTS/Start Kokoro")]
+        [MenuItem("Inference Engine/Sample/Text-To-Speech/Start Kokoro")]
         public static void OpenWindow()
         {
             var window = GetWindow<AppEditorWindow>();
@@ -24,7 +24,7 @@ namespace Unity.InferenceEngine.Samples.TTS.Editor
             window.Show();
         }
 
-        [MenuItem("Inference Engine/Sample/TTS/Start Kokoro", true)]
+        [MenuItem("Inference Engine/Sample/Text-To-Speech/Start Kokoro", true)]
         public static bool ValidateOpenWindow()
         {
             var configurations = UI.Network.ModelDownloaderWindow.GetDownloadConfigurations();
