@@ -102,8 +102,12 @@ namespace Unity.InferenceEngine.Samples.TTS.Inference
             if (string.IsNullOrEmpty(inputText))
                 return Array.Empty<int>();
 
+#if !PHONEMES
             var phonemes = TextToPhonemes(inputText);
             return Tokenize(phonemes);
+#else
+            return Tokenize(inputText);
+#endif
         }
 
         static int[] Tokenize(string phonemes)
@@ -236,9 +240,9 @@ namespace Unity.InferenceEngine.Samples.TTS.Inference
         {
             // Check if the word contains apostrophe and looks like a contraction/possessive
             return (word.Contains("'") || word.Contains("'") || word.Contains("\u2019")) &&
-                   word.Length > 2 &&
-                   !word.StartsWith('\'') && !word.StartsWith('\'') && !word.StartsWith('’') &&
-                   !word.EndsWith('\'') && !word.EndsWith('\'') && !word.EndsWith('’');
+                word.Length > 2 &&
+                !word.StartsWith('\'') && !word.StartsWith('\'') && !word.StartsWith('’') &&
+                !word.EndsWith('\'') && !word.EndsWith('\'') && !word.EndsWith('’');
         }
 
         static string GetSimpleTag(string word)
