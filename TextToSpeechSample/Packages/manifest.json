@@ -1,6 +1,6 @@
 {
   "dependencies": {
-    "com.unity.ai.inference": "2.3.0",
+    "com.unity.ai.inference": "2.4.0",
     "com.unity.ai.navigation": "2.0.9",
     "com.unity.collab-proxy": "2.9.3",
     "com.unity.ide.rider": "3.0.38",
