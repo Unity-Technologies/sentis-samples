@@ -1,6 +1,7 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
-using Unity.ML.Tokenization;
+using Unity.InferenceEngine.Tokenization;
 using UnityEngine;
 
 namespace Unity.InferenceEngine.Samples.Chat
@@ -89,7 +90,7 @@ namespace Unity.InferenceEngine.Samples.Chat
                 this.pastKeysValues = pastKeysValues;
             }
 
-            public Input(Encoding encoding, Tensor<float> textEmbeddings, Tensor<float> imageEmbeddings)
+            public Input(IEncoding encoding, Tensor<float> textEmbeddings, Tensor<float> imageEmbeddings)
             {
                 var inputsEmbeddings = InsertImageEmbeddingInTextEmbedding(encoding, textEmbeddings, imageEmbeddings);
                 Initialize(inputsEmbeddings);
@@ -125,10 +126,12 @@ namespace Unity.InferenceEngine.Samples.Chat
                 }
             }
 
-            Tensor<float> InsertImageEmbeddingInTextEmbedding(Encoding encoding, Tensor<float> textEmbeddings, Tensor<float> imageEmbeddings)
+            Tensor<float> InsertImageEmbeddingInTextEmbedding(IEncoding encoding, Tensor<float> textEmbeddings, Tensor<float> imageEmbeddings)
             {
                 var imagePosition = -1;
-                var encodingArray = encoding.Ids.ToArray();
+
+                var encodingArray = new List<int>();
+                encoding.GetIds(encodingArray);
                 for (var i = 0; i < encoding.Length; ++i)
                 {
                     if (encodingArray[i] == LlavaConfig.TokenIdImage)

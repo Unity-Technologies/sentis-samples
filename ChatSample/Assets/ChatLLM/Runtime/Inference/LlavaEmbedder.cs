@@ -1,6 +1,6 @@
 using System;
-using System.Linq;
-using Unity.ML.Tokenization;
+using System.Collections.Generic;
+using Unity.InferenceEngine.Tokenization;
 
 namespace Unity.InferenceEngine.Samples.Chat
 {
@@ -19,8 +19,9 @@ namespace Unity.InferenceEngine.Samples.Chat
             LoadModelIfMissing();
 
             var inputEncoding = m_Config.Tokenizer.Encode(input.text);
-            var inputIds = inputEncoding.Ids.ToArray();
-            var inputTensor = new Tensor<int>(new TensorShape(1, inputEncoding.Length), inputIds);
+            var inputIds = new List<int>();
+            inputEncoding.GetIds(inputIds);
+            var inputTensor = new Tensor<int>(new TensorShape(1, inputEncoding.Length), inputIds.ToArray());
 
             m_Worker ??= new Worker(m_Model, m_Config.BackendType);
             m_Worker.Schedule(inputTensor);
@@ -46,7 +47,7 @@ namespace Unity.InferenceEngine.Samples.Chat
 
         public record Input(string text);
 
-        public sealed record Output(Encoding encoding, Tensor<float> embedding) : IDisposable
+        public sealed record Output(IEncoding encoding, Tensor<float> embedding) : IDisposable
         {
             public void Dispose()
             {
