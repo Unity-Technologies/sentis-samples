@@ -1,0 +1,14 @@
+.tts-audio-player {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.progress-bar {
+    flex-grow: 1;
+    flex-shrink: 1;
+}
+
+.appui-slider__labelcontainer {
+    display: none;
+}

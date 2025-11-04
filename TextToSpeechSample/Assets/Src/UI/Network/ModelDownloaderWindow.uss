@@ -1,0 +1,14 @@
+.model-downloader-window {
+    flex-grow: 1;
+}
+
+.model-downloader-scrollview {
+
+}
+
+.model-downloader-element {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    padding: var(--appui-spacing-100);
+}

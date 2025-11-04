@@ -2,6 +2,8 @@
 
 Contains example and template projects for Inference Engine package use.
 ## Samples
+[Text To Speech Sample](TextToSpeechSample/README.md)
+
 [Chat LLM Sample](ChatSample/README.md)
 
 [Blaze Face/Hand/Pose Detection](BlazeDetectionSample/README.md)

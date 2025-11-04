@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<engine:UXML
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xmlns:engine="UnityEngine.UIElements"
+        xmlns:appui="Unity.AppUI.UI"
+        xmlns:tts="Unity.InferenceEngine.Samples.TTS.UI"
+        xsi:noNamespaceSchemaLocation="../../../../../../UIElementsSchema/UIElements.xsd"
+>
+    <engine:Style src="AudioPlayer.uss"/>
+    <tts:AudioPlayer name="Audio Player" class="tts-audio-player">
+        <appui:IconButton name="Play Button" class="play-button" quiet="true" icon="play"/>
+        <appui:Spacer/>
+        <appui:Text name="Time Text" class="time-text" text="00:00 / 00:00"/>
+        <appui:Spacer/>
+        <appui:SliderFloat name="Progress Bar" class="progress-bar" low-value="0" high-value="100" value="50"
+                           filled="true"/>
+        <appui:Spacer/>
+        <appui:IconButton name="Download Button" class="download-button" quiet="true" icon="installs"/>
+    </tts:AudioPlayer>
+</engine:UXML>
