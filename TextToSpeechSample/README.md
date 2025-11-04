@@ -1,6 +1,6 @@
 # Text-to-Speech Sample
 
-Interactive interface powered by the Kokoro Text-To-Speech model running locally in Unity using Inference Engine.
+Interactive interface powered by the Kokoro Text-To-Speech model running locally in Unity using Sentis.
 
 ![TTS Interface](Documentation/main.png)
 
@@ -20,7 +20,7 @@ We use this to create a seamless text-to-speech experience with natural-sounding
 
 - **Multiple Voices**: Choose from various pre-trained voice styles
 - **Speed Control**: Adjustable speech rate for different use cases
-- **Real-time Generation**: Fast GPU-accelerated inference using Unity's Inference Engine
+- **Real-time Generation**: Fast GPU-accelerated inference using Unity's Sentis
 - **Editor Integration**: Available as an Editor window for development and testing
 - **Cross-Platform**: Support for all Unity-supported platforms thanks to pure C# implementation
 - **Model Management**: Automated model downloading and setup
@@ -29,8 +29,8 @@ We use this to create a seamless text-to-speech experience with natural-sounding
 ## Getting Started
 
 1. Open the Unity project
-2. Download models by navigating to **Inference Engine > Sample > Text-To-Speech > Download Models** in the menu
-3. Navigate to **Inference Engine > Sample > Text-To-Speech > Start Kokoro** in the menu
+2. Download models by navigating to **Sentis > Sample > Text-To-Speech > Download Models** in the menu
+3. Navigate to **Sentis > Sample > Text-To-Speech > Start Kokoro** in the menu
 4. Enter text and generate speech with your chosen voice!
 
 Alternatively, you can use the runtime scene at `TextToSpeechSample/Assets/Scenes/App.unity`, but make sure to download the models beforehand using the editor menu.

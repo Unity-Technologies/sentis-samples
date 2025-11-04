@@ -1,6 +1,6 @@
 # Star Simulation Sample
 
-Star simulation demo showing how to use Inference Engine as a linear algebra library, solving equations of motions, all on the GPU.
+Star simulation demo showing how to use Sentis as a linear algebra library, solving equations of motions, all on the GPU.
 
 ![image info](./Documentation/main.jpg)
 
@@ -8,7 +8,7 @@ Star simulation demo showing how to use Inference Engine as a linear algebra lib
 
 Equations of motion can be written in matrix form (Hamiltonian mechanics https://en.wikipedia.org/wiki/Hamiltonian_mechanics).
 
-Inference Engine is at its core a tensor-based linear algebra engine, so you can use this to simulate a physical system in real time.
+Sentis is at its core a tensor-based linear algebra engine, so you can use this to simulate a physical system in real time.
 
 The strength of this solution resides in the simplicity of writing out the system and efficient CPU/GPU code handling the intense computations while they remain on the GPU or Unity job system.
 
@@ -40,7 +40,7 @@ We will use the current values to update the position and brightness of each sta
 
 We won't get into the specifics of the equations of motion here.
 
-But we write them out as matrix form (2D-tensor), using Inference Engine [functional api](https://docs.unity3d.com/Packages/com.unity.ai.inference@2.2/manual/create-a-new-model.html).
+But we write them out as matrix form (2D-tensor), using Sentis [functional api](https://docs.unity3d.com/Packages/com.unity.ai.inference@2.2/manual/create-a-new-model.html).
 
 This allows us to define successive tensor operations in a few lines of code, defining the system of equations to compute every frame.
 We compile this set of operations to a `Model` which then can be used as usual.

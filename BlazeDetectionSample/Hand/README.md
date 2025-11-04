@@ -1,10 +1,10 @@
-# BlazeHand in Inference Engine
+# BlazeHand in Sentis
 
 BlazeHand is a fast, light-weight hand detector from Google Research. Pretrained models are available as part of Google's [MediaPipe](https://ai.google.dev/edge/mediapipe/solutions/vision/hand_landmarker) framework.
 
 ![](../images/hand.jpg)
 
-The BlazeHand models have been converted from TFLite to ONNX for use in Inference Engine using [tf2onnx](https://github.com/onnx/tensorflow-onnx) with the default export parameters.
+The BlazeHand models have been converted from TFLite to ONNX for use in Sentis using [tf2onnx](https://github.com/onnx/tensorflow-onnx) with the default export parameters.
 
 ## Functional API
 
@@ -14,7 +14,7 @@ Each of the 2016 boxes consists of:
 - [x position, y position, width, height] for the palm bounding box. The position is relative to the anchor position for the given index, these are precalculated and loaded from a csv file.
 - [x position, y position] for each of 7 palm keypoints relative to the anchor position.
 
-We adapt the model using the Inference Engine functional API to apply arg max to filter the box with the highest score.
+We adapt the model using the Sentis functional API to apply arg max to filter the box with the highest score.
 ```
 var detectionScores = ScoreFiltering(rawScores, 100f); // (1, 2254, 1)
 var bestScoreIndex = Functional.ArgMax(rawScores, 1).Squeeze();
@@ -75,6 +75,6 @@ m_HandLandmarkerWorker.Schedule(m_LandmarkerInput);
 The output tensor of the landmarker model is asynchronously downloaded and once the values are on the CPU we use them together with the affine transformation matrix to set the transforms on the keypoints for visualization.
 
 ## WebGPU
-Unity 6 supports access to the WebGPU backend in early access. Inference Engine has full support for running models on the web using the WebGPU backend. Discover how to gain early access and test WebGPU in our [graphics forum](https://discussions.unity.com/t/early-access-to-the-new-webgpu-backend-in-unity-2023-3/933493).
+Unity 6 supports access to the WebGPU backend in early access. Sentis has full support for running models on the web using the WebGPU backend. Discover how to gain early access and test WebGPU in our [graphics forum](https://discussions.unity.com/t/early-access-to-the-new-webgpu-backend-in-unity-2023-3/933493).
 
 ![](../images/hand_webgpu.png)

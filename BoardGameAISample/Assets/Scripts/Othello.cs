@@ -175,7 +175,7 @@ public class Othello : MonoBehaviour
     {
         m_Engine?.Dispose();
 
-         // Load in the neural network that will make the move predictions for the spirit + create inference engine
+         // Load in the neural network that will make the move predictions for the spirit + create Sentis
         var othelloModel = ModelLoader.Load(model);
 
         var graph = new FunctionalGraph();

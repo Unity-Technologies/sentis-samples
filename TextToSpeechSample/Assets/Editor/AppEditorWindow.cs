@@ -16,7 +16,7 @@ namespace Unity.InferenceEngine.Samples.TTS.Editor
             visualTreeAsset.CloneTree(rootVisualElement);
         }
 
-        [MenuItem("Inference Engine/Sample/Text-To-Speech/Start Kokoro")]
+        [MenuItem("Sentis/Sample/Text-To-Speech/Start Kokoro")]
         public static void OpenWindow()
         {
             var window = GetWindow<AppEditorWindow>();
@@ -24,7 +24,7 @@ namespace Unity.InferenceEngine.Samples.TTS.Editor
             window.Show();
         }
 
-        [MenuItem("Inference Engine/Sample/Text-To-Speech/Start Kokoro", true)]
+        [MenuItem("Sentis/Sample/Text-To-Speech/Start Kokoro", true)]
         public static bool ValidateOpenWindow()
         {
             var configurations = UI.Network.ModelDownloaderWindow.GetDownloadConfigurations();

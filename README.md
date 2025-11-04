@@ -1,6 +1,6 @@
-# Inference Engine Samples
+# Sentis Samples
 
-Contains example and template projects for Inference Engine package use.
+Contains example and template projects for Sentis package use.
 ## Samples
 [Text To Speech Sample](TextToSpeechSample/README.md)
 
