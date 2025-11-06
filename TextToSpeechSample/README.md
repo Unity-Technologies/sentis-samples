@@ -20,7 +20,7 @@ We use this to create a seamless text-to-speech experience with natural-sounding
 
 - **Multiple Voices**: Choose from various pre-trained voice styles
 - **Speed Control**: Adjustable speech rate for different use cases
-- **Real-time Generation**: Fast GPU-accelerated inference using Unity's Sentis
+- **Real-time Generation**: Fast GPU-accelerated inference using Sentis
 - **Editor Integration**: Available as an Editor window for development and testing
 - **Cross-Platform**: Support for all Unity-supported platforms thanks to pure C# implementation
 - **Model Management**: Automated model downloading and setup
