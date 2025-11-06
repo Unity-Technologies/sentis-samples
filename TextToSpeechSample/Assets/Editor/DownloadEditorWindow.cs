@@ -15,7 +15,7 @@ namespace Unity.InferenceEngine.Samples.TTS.Editor
             visualTreeAsset.CloneTree(rootVisualElement);
         }
 
-        [MenuItem("Inference Engine/Sample/Text-To-Speech/Download Models")]
+        [MenuItem("Sentis/Sample/Text-To-Speech/Download Models")]
         public static void OpenWindow()
         {
             var window = GetWindow<DownloadEditorWindow>();

@@ -1,6 +1,6 @@
 # Chat LLM Sample
 
-Interactive chat interface powered by the LLaVA OneVision multimodal model running locally in Unity using Inference Engine.
+Interactive chat interface powered by the LLaVA OneVision multimodal model running locally in Unity using Sentis.
 
 ![Chat Interface](Documentation/main.png)
 
@@ -18,7 +18,7 @@ We use this to create a seamless conversational AI experience.
 ## Features
 
 - **Multimodal Understanding**: Processes both text and images in conversation
-- **Real-time Inference**: Fast GPU-accelerated inference using Unity's Inference Engine
+- **Real-time Inference**: Fast GPU-accelerated inference using Unity's Sentis
 - **Editor Integration**: Available as an Editor window for development and testing
 - **Streaming Responses**: Token-by-token response generation for responsive interaction
 - **Model Management**: HuggingFace model downloading
@@ -26,8 +26,8 @@ We use this to create a seamless conversational AI experience.
 ## Getting Started
 
 1. Open the Unity project
-2. Download models by navigating to **Inference Engine > Sample > Chat > Download Models** in the menu
-3. Navigate to **Inference Engine > Sample > Chat > Start Chat** in the menu
+2. Download models by navigating to **Sentis > Sample > Chat > Download Models** in the menu
+3. Navigate to **Sentis > Sample > Chat > Start Chat** in the menu
 4. Start chatting with the AI assistant!
 
 Alternatively, you can manually download the models from [https://huggingface.co/llava-hf/llava-onevision-qwen2-0.5b-si-hf](https://huggingface.co/llava-hf/llava-onevision-qwen2-0.5b-si-hf) and place them in `ChatSample/Assets/ChatLLM/Resources/Models/`.

@@ -1,14 +1,14 @@
-# Blaze detection models in Inference Engine
+# Blaze detection models in Sentis
 
-The blaze family of models are light-weight models for real-time detection from Google Research. Here we demonstrate using these pretrained models in Unity using Inference Engine.
+The blaze family of models are light-weight models for real-time detection from Google Research. Here we demonstrate using these pretrained models in Unity using Sentis.
 
-We use the Inference Engine API to augment the models, run asynchronous inference on the GPU on all Unity backends.
+We use the Sentis API to augment the models, run asynchronous inference on the GPU on all Unity backends.
 
 These demos use images for detection, but can be easily adapted for videos or webcams.
 
 ## Face detection
 
-We use the BlazeFace detector model with the Inference Engine non max suppression operator to recognise multiple faces in an image. Each face has a score, bounding box and 6 keypoints.
+We use the BlazeFace detector model with the Sentis non max suppression operator to recognise multiple faces in an image. Each face has a score, bounding box and 6 keypoints.
 
 ![](./images/face.jpg)
 

@@ -34,7 +34,7 @@ namespace Unity.InferenceEngine.Samples.Chat.Editor
             m_ChatWindow?.Dispose();
         }
 
-        [MenuItem("Inference Engine/Sample/Chat/Start Chat")]
+        [MenuItem("Sentis/Sample/Chat/Start Chat")]
         public static void OpenWindow()
         {
             var window = GetWindow<EditorChatWindow>();
@@ -43,13 +43,13 @@ namespace Unity.InferenceEngine.Samples.Chat.Editor
             window.Show();
         }
 
-        [MenuItem("Inference Engine/Sample/Chat/Start Chat", true)]
+        [MenuItem("Sentis/Sample/Chat/Start Chat", true)]
         public static bool OpenWindowValidate()
         {
             return ModelDownloaderWindow.VerifyModelsExist();
         }
 
-        [MenuItem("Inference Engine/Sample/Chat/Download Models")]
+        [MenuItem("Sentis/Sample/Chat/Download Models")]
         public static void DownloadModels()
         {
             var window = GetWindow<ModelDownloaderEditorWindow>();
@@ -58,7 +58,7 @@ namespace Unity.InferenceEngine.Samples.Chat.Editor
             window.Show();
         }
 
-        [MenuItem("Inference Engine/Sample/Chat/Download Models", true)]
+        [MenuItem("Sentis/Sample/Chat/Download Models", true)]
         public static bool DownloadModelsValidate()
         {
             return !ModelDownloaderWindow.VerifyModelsExist();
