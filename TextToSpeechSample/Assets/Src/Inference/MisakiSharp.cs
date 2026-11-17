@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using System.Text.RegularExpressions;
 using Newtonsoft.Json;
@@ -12,6 +13,15 @@ namespace Unity.InferenceEngine.Samples.TTS.Inference
     {
         public string Text { get; init; } = "";
         public string Tag { get; init; } = "";
+
+        /// <summary>Explicit phonemes supplied via <c>[text](/phonemes/)</c>; bypasses lexicon lookup when non-null.</summary>
+        public string Phonemes { get; init; }
+
+        /// <summary>Stress override supplied via <c>[text](number)</c>, e.g. <c>[word](-1)</c>.</summary>
+        public float? Stress { get; init; }
+
+        /// <summary>Spell the token letter by letter (e.g. merged "T T S" or dotted "U.S.A.").</summary>
+        public bool SpellOut { get; init; }
     }
 
     public class TokenContext
@@ -135,7 +145,7 @@ namespace Unity.InferenceEngine.Samples.TTS.Inference
 
             LoadDictionaries();
 
-            var tokens = SimpleTokenize(text);
+            var tokens = TagArticles(TokenizeWithOverrides(text));
             var result = new List<string>();
 
             var context = new TokenContext();
@@ -153,13 +163,101 @@ namespace Unity.InferenceEngine.Samples.TTS.Inference
             return string.Join(" ", result);
         }
 
+        // Misaki-style inline markup: [text](/phonemes/) or [text](stress)
+        static readonly Regex k_LinkRegex = new(@"\[([^\]]+)\]\(([^\)]*)\)", RegexOptions.Compiled);
+
+        /// <summary>
+        /// Tokenizes text while honoring Misaki-style inline markup:
+        /// <list type="bullet">
+        /// <item><c>[Kokoro](/kˈOkəɹO/)</c> — use the given phonemes verbatim for the bracketed text.</item>
+        /// <item><c>[word](-1)</c> — look the word(s) up normally but apply the given stress value.</item>
+        /// </list>
+        /// Unrecognized annotations fall back to speaking the bracketed text normally.
+        /// </summary>
+        static bool IsWordToken(MToken token) =>
+            token != null && token.Tag != "PUNCT" && token.Text.Any(char.IsLetterOrDigit);
+
+        /// <summary>
+        /// Tags "a"/"A" used as an article as a determiner (DT), so it's read "uh" (ɐ) instead of the
+        /// letter name "ay" (ˈA). There is no POS tagger, so this uses context:
+        /// <list type="bullet">
+        /// <item>"a" followed by a word is an article ("a dog").</item>
+        /// <item>"A" followed by a word is an article only at the start of a sentence/clause ("A dog barked."),
+        /// not mid-sentence ("Plan A is ready").</item>
+        /// <item>Anything not followed by a word is the letter ("vitamin A.").</item>
+        /// </list>
+        /// </summary>
+        static List<MToken> TagArticles(List<MToken> tokens)
+        {
+            for (var i = 0; i < tokens.Count; i++)
+            {
+                var token = tokens[i];
+                if (token.Phonemes != null || token.SpellOut || (token.Text != "a" && token.Text != "A"))
+                    continue;
+
+                var next = i + 1 < tokens.Count ? tokens[i + 1] : null;
+                if (!IsWordToken(next))
+                    continue;
+
+                var previous = i > 0 ? tokens[i - 1] : null;
+                var atClauseStart = previous == null || previous.Tag == "PUNCT";
+                if (token.Text == "A" && !atClauseStart)
+                    continue;
+
+                tokens[i] = new MToken { Text = token.Text, Tag = "DT", Stress = token.Stress };
+            }
+            return tokens;
+        }
+
+        static List<MToken> TokenizeWithOverrides(string text)
+        {
+            var tokens = new List<MToken>();
+            var lastIndex = 0;
+
+            foreach (Match match in k_LinkRegex.Matches(text))
+            {
+                if (match.Index > lastIndex)
+                    tokens.AddRange(SimpleTokenize(text.Substring(lastIndex, match.Index - lastIndex)));
+
+                var displayText = match.Groups[1].Value;
+                var feature = match.Groups[2].Value.Trim();
+
+                if (feature.Length >= 2 && feature[0] == '/' && feature[^1] == '/')
+                {
+                    tokens.Add(new MToken
+                    {
+                        Text = displayText,
+                        Tag = GetSimpleTag(displayText),
+                        Phonemes = feature.Substring(1, feature.Length - 2).Trim()
+                    });
+                }
+                else if (float.TryParse(feature, NumberStyles.Float, CultureInfo.InvariantCulture, out var stress))
+                {
+                    foreach (var t in SimpleTokenize(displayText))
+                        tokens.Add(new MToken { Text = t.Text, Tag = t.Tag, Stress = t.Tag == "PUNCT" ? null : stress });
+                }
+                else
+                {
+                    tokens.AddRange(SimpleTokenize(displayText));
+                }
+
+                lastIndex = match.Index + match.Length;
+            }
+
+            if (lastIndex < text.Length)
+                tokens.AddRange(SimpleTokenize(text.Substring(lastIndex)));
+
+            return tokens;
+        }
+
         static List<MToken> SimpleTokenize(string text)
         {
             var tokens = new List<MToken>();
 
             // More sophisticated regex to handle punctuation, contractions, and spacing
             // Note: Don't split on apostrophes to preserve contractions
-            var words = Regex.Split(text, @"(\s+|[.,!?;:—…""()]+)")
+            // Dotted abbreviations ("U.S.A.", "e.g.") are captured whole so their periods aren't read as sentence breaks.
+            var words = Regex.Split(text, @"((?<![A-Za-z])(?:[A-Za-z]\.){2,}|\s+|[.,!?;:—…""()]+)")
                 .Where(w => !string.IsNullOrEmpty(w))
                 .ToArray();
 
@@ -170,6 +268,12 @@ namespace Unity.InferenceEngine.Samples.TTS.Inference
 
                 if (string.IsNullOrWhiteSpace(trimmedWord))
                     continue;
+
+                if (k_DottedAbbreviationRegex.IsMatch(trimmedWord))
+                {
+                    tokens.Add(new MToken { Text = trimmedWord, Tag = "NNP", SpellOut = true });
+                    continue;
+                }
 
                 // Handle words with attached punctuation (like "Hello,", "Today's", etc.)
                 var cleanedWords = SplitWordWithPunctuation(trimmedWord);
@@ -188,7 +292,39 @@ namespace Unity.InferenceEngine.Samples.TTS.Inference
                 }
             }
 
-            return tokens;
+            return MergeSpacedLetters(tokens);
+        }
+
+        static readonly Regex k_DottedAbbreviationRegex = new(@"^(?:[A-Za-z]\.){2,}$", RegexOptions.Compiled);
+
+        static bool IsSingleCapitalLetter(MToken token) =>
+            token.Text.Length == 1 && token.Text[0] is >= 'A' and <= 'Z';
+
+        /// <summary>
+        /// Merges runs of two or more single capital letters ("T T S") into one spelled-out token,
+        /// so they're pronounced as a single acronym rather than separately stressed words.
+        /// </summary>
+        static List<MToken> MergeSpacedLetters(List<MToken> tokens)
+        {
+            var result = new List<MToken>(tokens.Count);
+            for (int i = 0; i < tokens.Count; i++)
+            {
+                int runEnd = i;
+                while (runEnd < tokens.Count && IsSingleCapitalLetter(tokens[runEnd]))
+                    runEnd++;
+
+                if (runEnd - i >= 2)
+                {
+                    var letters = string.Concat(tokens.Skip(i).Take(runEnd - i).Select(t => t.Text));
+                    result.Add(new MToken { Text = letters, Tag = "NNP", SpellOut = true });
+                    i = runEnd - 1;
+                }
+                else
+                {
+                    result.Add(tokens[i]);
+                }
+            }
+            return result;
         }
 
         static List<string> SplitWordWithPunctuation(string word)
@@ -271,8 +407,20 @@ namespace Unity.InferenceEngine.Samples.TTS.Inference
         {
             var word = token.Text;
 
+            // Explicit phoneme override from [text](/phonemes/) markup
+            if (token.Phonemes != null)
+                return token.Phonemes;
+
             if (string.IsNullOrEmpty(word))
                 return "";
+
+            // Explicitly spelled tokens ("T T S", "U.S.A.")
+            if (token.SpellOut)
+                return SpellLetters(word, token.Stress);
+
+            // Standalone dashes ("word - word", "word -- word") act as a pause
+            if (word.All(k_Hyphens.Contains))
+                return "—";
 
             // Handle punctuation
             if (word.Length == 1 && k_Puncts.Contains(word[0]))
@@ -296,14 +444,31 @@ namespace Unity.InferenceEngine.Samples.TTS.Inference
             var contractedPhonemes = HandleContractions(word);
             if (!string.IsNullOrEmpty(contractedPhonemes))
             {
-                return contractedPhonemes;
+                return ApplyStress(contractedPhonemes, token.Stress);
             }
 
+            // Acronyms ("TTS", "GPU", "IT") and their plurals ("GPUs")
+            if (ShouldSpellAsAcronym(word))
+                return SpellLetters(word, token.Stress);
+            if (word.Length > 2 && word[^1] == 's' && ShouldSpellAsAcronym(word[..^1]))
+                return ApplySSuffix(SpellLetters(word[..^1], token.Stress));
+
             // Try lexicon lookup
-            var (phonemes, _) = LookupWord(word, token.Tag, null, context);
+            var (phonemes, _) = LookupWord(word, token.Tag, token.Stress, context);
             if (!string.IsNullOrEmpty(phonemes))
             {
                 return phonemes;
+            }
+
+            // Hyphenated compounds not in the lexicon ("Apache-licensed"): read each part
+            if (word.Any(k_Hyphens.Contains))
+            {
+                var parts = word.Split(k_Hyphens.ToArray(), StringSplitOptions.RemoveEmptyEntries)
+                    .Select(part => GetWordPhonemes(new MToken { Text = part, Tag = GetSimpleTag(part), Stress = token.Stress }, context))
+                    .Where(p => !string.IsNullOrEmpty(p))
+                    .ToList();
+                if (parts.Count > 0)
+                    return string.Join(" ", parts);
             }
 
             // If no phonemes found, return empty (no eSpeak fallback)
@@ -313,6 +478,70 @@ namespace Unity.InferenceEngine.Samples.TTS.Inference
                 Debug.LogWarning($"Could not find phonemes for word: '{word}' (tag: '{token.Tag}')");
             }
             return "";
+        }
+
+        // Hyphen-minus, hyphen, non-breaking hyphen, en dash
+        static readonly HashSet<char> k_Hyphens = new() { '-', '‐', '‑', '–' };
+
+        static bool TryGetLexiconEntry(string word, out object entry)
+        {
+            if (s_GoldDictionary.TryGetValue(word, out entry))
+                return true;
+            if (s_SilverDictionary.TryGetValue(word, out var silver))
+            {
+                entry = silver;
+                return true;
+            }
+            return false;
+        }
+
+        /// <summary>
+        /// Decides whether an all-caps word should be read letter by letter, following Misaki:
+        /// an exact all-caps lexicon entry wins (e.g. "NASA") unless its noun reading is null, which marks
+        /// an initialism (e.g. "IT", "US"); otherwise spell it unless the lowercase form is a known word
+        /// (so shouted text like "HELLO WORLD" is still read normally).
+        /// </summary>
+        static bool ShouldSpellAsAcronym(string word)
+        {
+            if (word.Length < 2 || !word.All(c => c is >= 'A' and <= 'Z'))
+                return false;
+
+            if (TryGetLexiconEntry(word, out var entry))
+                return entry is JObject complex && complex.TryGetValue("NOUN", out var noun) && noun.Type == JTokenType.Null;
+
+            var (lowerPhonemes, _) = LookupWord(word.ToLowerInvariant(), "NN", null, new TokenContext());
+            return string.IsNullOrEmpty(lowerPhonemes);
+        }
+
+        static string GetLetterPhonemes(char letter)
+        {
+            var key = char.ToUpperInvariant(letter).ToString();
+            if (!s_GoldDictionary.TryGetValue(key, out var entry))
+                return null;
+            return entry switch
+            {
+                string s => s,
+                JObject complex when complex.TryGetValue("DEFAULT", out var value) => value?.ToString(),
+                _ => null
+            };
+        }
+
+        /// <summary>
+        /// Spells a word as a single acronym, e.g. "TTS" → "tˌitˌiˈɛs": letters are joined,
+        /// demoted to secondary stress, and the final stressed letter gets primary stress (as in Misaki's get_NNP).
+        /// </summary>
+        static string SpellLetters(string word, float? stress)
+        {
+            var joined = string.Concat(word.Where(char.IsLetter).Select(GetLetterPhonemes).Where(p => !string.IsNullOrEmpty(p)));
+            if (joined.Length == 0)
+                return "";
+
+            var phonemes = ApplyStress(joined, 0);
+            var lastSecondary = phonemes.LastIndexOf(k_SecondaryStress);
+            if (lastSecondary >= 0)
+                phonemes = phonemes.Substring(0, lastSecondary) + k_PrimaryStress + phonemes.Substring(lastSecondary + 1);
+
+            return ApplyStress(phonemes, stress);
         }
 
         static string GetPunctuationPhonemes(string punct)
@@ -451,6 +680,10 @@ namespace Unity.InferenceEngine.Samples.TTS.Inference
             if (word.EndsWith("'s") || word.EndsWith("'s") || word.EndsWith("\u2019s"))
             {
                 var baseWord = word.Substring(0, word.Length - 2);
+
+                // Acronym possessives ("GPU's")
+                if (ShouldSpellAsAcronym(baseWord))
+                    return ApplySSuffix(SpellLetters(baseWord, null));
 
                 // Try to look up the base word and add "s" sound
                 var (basePhonemes, _) = LookupWord(baseWord, "NN", null, new TokenContext());

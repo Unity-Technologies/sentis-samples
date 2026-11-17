@@ -1,3 +1,4 @@
+using System.Linq;
 using NUnit.Framework;
 using Unity.InferenceEngine.Samples.TTS.Inference;
 using UnityEngine;
@@ -220,6 +221,206 @@ namespace Unity.InferenceEngine.Samples.TTS.Tests
             }
 
             Debug.Log($"Consistency test passed for {tokens1.Length} tokens.");
+        }
+
+        [Test]
+        public void CustomPronunciationOverride()
+        {
+            var phonemes = MisakiSharp.TextToPhonemes("[Kokoro](/kˈOkəɹO/)");
+            Assert.AreEqual("kˈOkəɹO", phonemes);
+        }
+
+        [Test]
+        public void CustomPronunciationInSentence()
+        {
+            var phonemes = MisakiSharp.TextToPhonemes("Hello, [Kokoro](/kˈOkəɹO/) and [New York](/nˈu jˈɔɹk/) world.");
+            Debug.Log($"Custom pronunciation sentence -> '{phonemes}'");
+
+            StringAssert.Contains("kˈOkəɹO", phonemes);
+            StringAssert.Contains("nˈu jˈɔɹk", phonemes);
+            StringAssert.DoesNotContain("[", phonemes);
+            StringAssert.DoesNotContain("(", phonemes);
+            Assert.AreEqual(MisakiSharp.TextToPhonemes("Hello,"), phonemes.Substring(0, MisakiSharp.TextToPhonemes("Hello,").Length));
+            Assert.IsTrue(phonemes.EndsWith("."), "Trailing punctuation should be preserved.");
+        }
+
+        [Test]
+        public void CustomPronunciationTokenizes()
+        {
+            var tokens = MisakiSharp.TokenizeGraphemes("[Kokoro](/kˈOkəɹO/)");
+            Assert.AreEqual(7, tokens.Length, "Every phoneme in the override should map to a vocab token.");
+        }
+
+        [Test]
+        public void StressOverride()
+        {
+            var normal = MisakiSharp.TextToPhonemes("hello");
+            var unstressed = MisakiSharp.TextToPhonemes("[hello](-2)");
+            Debug.Log($"'hello' -> '{normal}' | '[hello](-2)' -> '{unstressed}'");
+
+            StringAssert.DoesNotContain("ˈ", unstressed);
+            StringAssert.DoesNotContain("ˌ", unstressed);
+            Assert.AreEqual(normal.Replace("ˈ", "").Replace("ˌ", ""), unstressed);
+        }
+
+        [Test]
+        public void UnrecognizedAnnotationFallsBackToText()
+        {
+            Assert.AreEqual(MisakiSharp.TextToPhonemes("hello"), MisakiSharp.TextToPhonemes("[hello](foo)"));
+        }
+
+        [Test]
+        public void HyphenatedWordsUnknownCompound()
+        {
+            var phonemes = MisakiSharp.TextToPhonemes("Apache-licensed");
+            Debug.Log($"'Apache-licensed' -> '{phonemes}'");
+            Assert.AreEqual(MisakiSharp.TextToPhonemes("Apache licensed"), phonemes);
+        }
+
+        [Test]
+        public void HyphenatedWordsKnownCompound()
+        {
+            // "self-driving" is in the gold lexicon as a single entry and should be used as-is
+            var phonemes = MisakiSharp.TextToPhonemes("self-driving");
+            Assert.AreEqual("sˌɛlfdɹˈIvɪŋ", phonemes);
+        }
+
+        [Test]
+        public void HyphenatedWordsWithNumbers()
+        {
+            var phonemes = MisakiSharp.TextToPhonemes("COVID-19");
+            Debug.Log($"'COVID-19' -> '{phonemes}'");
+            Assert.AreEqual("kˈOvˌɪd " + MisakiSharp.TextToPhonemes("19"), phonemes);
+        }
+
+        [Test]
+        public void StandaloneDashIsPause()
+        {
+            var phonemes = MisakiSharp.TextToPhonemes("hello - world");
+            StringAssert.Contains("—", phonemes);
+        }
+
+        [Test]
+        public void AcronymsAreSpelled()
+        {
+            var testCases = new[]
+            {
+                ("TTS", "tˌitˌiˈɛs"),
+                ("GPU", "ʤˌipˌijˈu"),
+                ("IT", "ˌItˈi"),      // lexicon marks the noun reading of "IT" as an initialism
+                ("T T S", "tˌitˌiˈɛs"),
+                ("U.S.A.", "jˌuˌɛsˈA"),
+                ("GPUs", "ʤˌipˌijˈuz"),
+                ("GPU's", "ʤˌipˌijˈuz")
+            };
+
+            foreach (var (input, expected) in testCases)
+            {
+                var phonemes = MisakiSharp.TextToPhonemes(input);
+                Debug.Log($"Acronym: '{input}' -> '{phonemes}'");
+                Assert.AreEqual(expected, phonemes, $"Unexpected phonemes for '{input}'.");
+            }
+        }
+
+        [Test]
+        public void AllCapsWordsAreNotSpelled()
+        {
+            // Known all-caps entries and shouted words should still be read as words
+            Assert.AreEqual("nˈæsə", MisakiSharp.TextToPhonemes("NASA"));
+            Assert.AreEqual(MisakiSharp.TextToPhonemes("hello"), MisakiSharp.TextToPhonemes("HELLO"));
+        }
+
+        [Test]
+        public void SingleCapitalLetterNotMerged()
+        {
+            // A lone letter (e.g. the pronoun "I") must not be merged with neighboring words
+            var phonemes = MisakiSharp.TextToPhonemes("I like TTS");
+            StringAssert.StartsWith("ˈI ", phonemes);
+            StringAssert.EndsWith("tˌitˌiˈɛs", phonemes);
+        }
+
+        const string k_LongText = "Kokoro is an open-weight TTS model with 82 million parameters. Despite its lightweight architecture, it delivers comparable quality to larger models while being significantly faster and more cost-efficient. With Apache-licensed weights, Kokoro can be deployed anywhere from production environments to personal projects. It is a small model, but a very capable one.";
+
+        [Test]
+        public void ChunksRespectLimitAndPreserveTokens()
+        {
+            var tokens = MisakiSharp.TokenizeGraphemes(k_LongText + " " + k_LongText);
+            const int max = 120;
+            var chunks = KokoroHandler.SplitIntoChunks(tokens, max);
+
+            Assert.Greater(chunks.Count, 1);
+            foreach (var chunk in chunks)
+            {
+                Assert.LessOrEqual(chunk.Length, max);
+                Assert.IsNotEmpty(chunk);
+                Assert.AreNotEqual(16, chunk[0], "Chunks should not start with a space.");
+            }
+
+            // Only boundary spaces are dropped; every other token is kept, in order.
+            const int space = 16;
+            CollectionAssert.AreEqual(tokens.Where(t => t != space), chunks.SelectMany(c => c).Where(t => t != space));
+        }
+
+        [Test]
+        public void ChunksPreferSentenceBoundaries()
+        {
+            var tokens = MisakiSharp.TokenizeGraphemes(k_LongText);
+            var chunks = KokoroHandler.SplitIntoChunks(tokens, 150);
+
+            // Every chunk except the last should end at sentence-final punctuation (. ! ? …) when one fits.
+            for (var i = 0; i < chunks.Count - 1; i++)
+                CollectionAssert.Contains(new[] { 4, 5, 6, 10 }, chunks[i][^1], $"Chunk {i} did not end at a sentence boundary.");
+        }
+
+        [Test]
+        public void ShortInputIsSingleChunk()
+        {
+            var tokens = MisakiSharp.TokenizeGraphemes("Hello, world!");
+            var chunks = KokoroHandler.SplitIntoChunks(tokens, 250);
+            Assert.AreEqual(1, chunks.Count);
+            CollectionAssert.AreEqual(tokens, chunks[0]);
+        }
+
+        [Test]
+        public void ArticleAIsReducedBeforeWords()
+        {
+            var testCases = new[]
+            {
+                "I want a dog.",
+                "A dog barked.",
+                "It was, a strange day.",
+                "Kokoro is a [TTS](/tˌitˌiˈɛs/) model.",
+                "a 5 star review"
+            };
+
+            foreach (var text in testCases)
+            {
+                var phonemes = MisakiSharp.TextToPhonemes(text);
+                Debug.Log($"Article: '{text}' -> '{phonemes}'");
+                var words = phonemes.Split(' ');
+                CollectionAssert.Contains(words, "ɐ", $"'a' in '{text}' should be read as an article (ɐ).");
+                CollectionAssert.DoesNotContain(words, "ˈA", $"'a' in '{text}' should not be read as the letter name.");
+            }
+        }
+
+        [Test]
+        public void LetterAIsKeptAsLetter()
+        {
+            var testCases = new[]
+            {
+                "Plan A is ready.",  // capital A mid-sentence
+                "I took vitamin A.", // not followed by a word
+                "a"                  // alone
+            };
+
+            foreach (var text in testCases)
+            {
+                var phonemes = MisakiSharp.TextToPhonemes(text);
+                Debug.Log($"Letter: '{text}' -> '{phonemes}'");
+                var words = phonemes.Split(' ');
+                CollectionAssert.Contains(words, "ˈA", $"'A' in '{text}' should be read as the letter name.");
+                CollectionAssert.DoesNotContain(words, "ɐ");
+            }
         }
 
         [Test]
