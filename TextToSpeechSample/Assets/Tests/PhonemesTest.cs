@@ -269,6 +269,76 @@ namespace Unity.InferenceEngine.Samples.TTS.Tests
         }
 
         [Test]
+        public void HyphenatedWordsUnknownCompound()
+        {
+            var phonemes = MisakiSharp.TextToPhonemes("Apache-licensed");
+            Debug.Log($"'Apache-licensed' -> '{phonemes}'");
+            Assert.AreEqual(MisakiSharp.TextToPhonemes("Apache licensed"), phonemes);
+        }
+
+        [Test]
+        public void HyphenatedWordsKnownCompound()
+        {
+            // "self-driving" is in the gold lexicon as a single entry and should be used as-is
+            var phonemes = MisakiSharp.TextToPhonemes("self-driving");
+            Assert.AreEqual("sˌɛlfdɹˈIvɪŋ", phonemes);
+        }
+
+        [Test]
+        public void HyphenatedWordsWithNumbers()
+        {
+            var phonemes = MisakiSharp.TextToPhonemes("COVID-19");
+            Debug.Log($"'COVID-19' -> '{phonemes}'");
+            Assert.AreEqual("kˈOvˌɪd " + MisakiSharp.TextToPhonemes("19"), phonemes);
+        }
+
+        [Test]
+        public void StandaloneDashIsPause()
+        {
+            var phonemes = MisakiSharp.TextToPhonemes("hello - world");
+            StringAssert.Contains("—", phonemes);
+        }
+
+        [Test]
+        public void AcronymsAreSpelled()
+        {
+            var testCases = new[]
+            {
+                ("TTS", "tˌitˌiˈɛs"),
+                ("GPU", "ʤˌipˌijˈu"),
+                ("IT", "ˌItˈi"),      // lexicon marks the noun reading of "IT" as an initialism
+                ("T T S", "tˌitˌiˈɛs"),
+                ("U.S.A.", "jˌuˌɛsˈA"),
+                ("GPUs", "ʤˌipˌijˈuz"),
+                ("GPU's", "ʤˌipˌijˈuz")
+            };
+
+            foreach (var (input, expected) in testCases)
+            {
+                var phonemes = MisakiSharp.TextToPhonemes(input);
+                Debug.Log($"Acronym: '{input}' -> '{phonemes}'");
+                Assert.AreEqual(expected, phonemes, $"Unexpected phonemes for '{input}'.");
+            }
+        }
+
+        [Test]
+        public void AllCapsWordsAreNotSpelled()
+        {
+            // Known all-caps entries and shouted words should still be read as words
+            Assert.AreEqual("nˈæsə", MisakiSharp.TextToPhonemes("NASA"));
+            Assert.AreEqual(MisakiSharp.TextToPhonemes("hello"), MisakiSharp.TextToPhonemes("HELLO"));
+        }
+
+        [Test]
+        public void SingleCapitalLetterNotMerged()
+        {
+            // A lone letter (e.g. the pronoun "I") must not be merged with neighboring words
+            var phonemes = MisakiSharp.TextToPhonemes("I like TTS");
+            StringAssert.StartsWith("ˈI ", phonemes);
+            StringAssert.EndsWith("tˌitˌiˈɛs", phonemes);
+        }
+
+        [Test]
         public void EmptyAndNullInputHandling()
         {
             // Test empty string
