@@ -1,3 +1,4 @@
+using System.Linq;
 using NUnit.Framework;
 using Unity.InferenceEngine.Samples.TTS.Inference;
 using UnityEngine;
@@ -336,6 +337,48 @@ namespace Unity.InferenceEngine.Samples.TTS.Tests
             var phonemes = MisakiSharp.TextToPhonemes("I like TTS");
             StringAssert.StartsWith("ˈI ", phonemes);
             StringAssert.EndsWith("tˌitˌiˈɛs", phonemes);
+        }
+
+        const string k_LongText = "Kokoro is an open-weight TTS model with 82 million parameters. Despite its lightweight architecture, it delivers comparable quality to larger models while being significantly faster and more cost-efficient. With Apache-licensed weights, Kokoro can be deployed anywhere from production environments to personal projects. It is a small model, but a very capable one.";
+
+        [Test]
+        public void ChunksRespectLimitAndPreserveTokens()
+        {
+            var tokens = MisakiSharp.TokenizeGraphemes(k_LongText + " " + k_LongText);
+            const int max = 120;
+            var chunks = KokoroHandler.SplitIntoChunks(tokens, max);
+
+            Assert.Greater(chunks.Count, 1);
+            foreach (var chunk in chunks)
+            {
+                Assert.LessOrEqual(chunk.Length, max);
+                Assert.IsNotEmpty(chunk);
+                Assert.AreNotEqual(16, chunk[0], "Chunks should not start with a space.");
+            }
+
+            // Only boundary spaces are dropped; every other token is kept, in order.
+            const int space = 16;
+            CollectionAssert.AreEqual(tokens.Where(t => t != space), chunks.SelectMany(c => c).Where(t => t != space));
+        }
+
+        [Test]
+        public void ChunksPreferSentenceBoundaries()
+        {
+            var tokens = MisakiSharp.TokenizeGraphemes(k_LongText);
+            var chunks = KokoroHandler.SplitIntoChunks(tokens, 150);
+
+            // Every chunk except the last should end at sentence-final punctuation (. ! ? …) when one fits.
+            for (var i = 0; i < chunks.Count - 1; i++)
+                CollectionAssert.Contains(new[] { 4, 5, 6, 10 }, chunks[i][^1], $"Chunk {i} did not end at a sentence boundary.");
+        }
+
+        [Test]
+        public void ShortInputIsSingleChunk()
+        {
+            var tokens = MisakiSharp.TokenizeGraphemes("Hello, world!");
+            var chunks = KokoroHandler.SplitIntoChunks(tokens, 250);
+            Assert.AreEqual(1, chunks.Count);
+            CollectionAssert.AreEqual(tokens, chunks[0]);
         }
 
         [Test]
