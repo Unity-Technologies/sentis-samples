@@ -382,6 +382,48 @@ namespace Unity.InferenceEngine.Samples.TTS.Tests
         }
 
         [Test]
+        public void ArticleAIsReducedBeforeWords()
+        {
+            var testCases = new[]
+            {
+                "I want a dog.",
+                "A dog barked.",
+                "It was, a strange day.",
+                "Kokoro is a [TTS](/tˌitˌiˈɛs/) model.",
+                "a 5 star review"
+            };
+
+            foreach (var text in testCases)
+            {
+                var phonemes = MisakiSharp.TextToPhonemes(text);
+                Debug.Log($"Article: '{text}' -> '{phonemes}'");
+                var words = phonemes.Split(' ');
+                CollectionAssert.Contains(words, "ɐ", $"'a' in '{text}' should be read as an article (ɐ).");
+                CollectionAssert.DoesNotContain(words, "ˈA", $"'a' in '{text}' should not be read as the letter name.");
+            }
+        }
+
+        [Test]
+        public void LetterAIsKeptAsLetter()
+        {
+            var testCases = new[]
+            {
+                "Plan A is ready.",  // capital A mid-sentence
+                "I took vitamin A.", // not followed by a word
+                "a"                  // alone
+            };
+
+            foreach (var text in testCases)
+            {
+                var phonemes = MisakiSharp.TextToPhonemes(text);
+                Debug.Log($"Letter: '{text}' -> '{phonemes}'");
+                var words = phonemes.Split(' ');
+                CollectionAssert.Contains(words, "ˈA", $"'A' in '{text}' should be read as the letter name.");
+                CollectionAssert.DoesNotContain(words, "ɐ");
+            }
+        }
+
+        [Test]
         public void EmptyAndNullInputHandling()
         {
             // Test empty string

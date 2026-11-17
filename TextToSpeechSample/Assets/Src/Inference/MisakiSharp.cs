@@ -145,7 +145,7 @@ namespace Unity.InferenceEngine.Samples.TTS.Inference
 
             LoadDictionaries();
 
-            var tokens = TokenizeWithOverrides(text);
+            var tokens = TagArticles(TokenizeWithOverrides(text));
             var result = new List<string>();
 
             var context = new TokenContext();
@@ -174,6 +174,41 @@ namespace Unity.InferenceEngine.Samples.TTS.Inference
         /// </list>
         /// Unrecognized annotations fall back to speaking the bracketed text normally.
         /// </summary>
+        static bool IsWordToken(MToken token) =>
+            token != null && token.Tag != "PUNCT" && token.Text.Any(char.IsLetterOrDigit);
+
+        /// <summary>
+        /// Tags "a"/"A" used as an article as a determiner (DT), so it's read "uh" (ɐ) instead of the
+        /// letter name "ay" (ˈA). There is no POS tagger, so this uses context:
+        /// <list type="bullet">
+        /// <item>"a" followed by a word is an article ("a dog").</item>
+        /// <item>"A" followed by a word is an article only at the start of a sentence/clause ("A dog barked."),
+        /// not mid-sentence ("Plan A is ready").</item>
+        /// <item>Anything not followed by a word is the letter ("vitamin A.").</item>
+        /// </list>
+        /// </summary>
+        static List<MToken> TagArticles(List<MToken> tokens)
+        {
+            for (var i = 0; i < tokens.Count; i++)
+            {
+                var token = tokens[i];
+                if (token.Phonemes != null || token.SpellOut || (token.Text != "a" && token.Text != "A"))
+                    continue;
+
+                var next = i + 1 < tokens.Count ? tokens[i + 1] : null;
+                if (!IsWordToken(next))
+                    continue;
+
+                var previous = i > 0 ? tokens[i - 1] : null;
+                var atClauseStart = previous == null || previous.Tag == "PUNCT";
+                if (token.Text == "A" && !atClauseStart)
+                    continue;
+
+                tokens[i] = new MToken { Text = token.Text, Tag = "DT", Stress = token.Stress };
+            }
+            return tokens;
+        }
+
         static List<MToken> TokenizeWithOverrides(string text)
         {
             var tokens = new List<MToken>();
