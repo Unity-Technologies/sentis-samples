@@ -223,6 +223,52 @@ namespace Unity.InferenceEngine.Samples.TTS.Tests
         }
 
         [Test]
+        public void CustomPronunciationOverride()
+        {
+            var phonemes = MisakiSharp.TextToPhonemes("[Kokoro](/kˈOkəɹO/)");
+            Assert.AreEqual("kˈOkəɹO", phonemes);
+        }
+
+        [Test]
+        public void CustomPronunciationInSentence()
+        {
+            var phonemes = MisakiSharp.TextToPhonemes("Hello, [Kokoro](/kˈOkəɹO/) and [New York](/nˈu jˈɔɹk/) world.");
+            Debug.Log($"Custom pronunciation sentence -> '{phonemes}'");
+
+            StringAssert.Contains("kˈOkəɹO", phonemes);
+            StringAssert.Contains("nˈu jˈɔɹk", phonemes);
+            StringAssert.DoesNotContain("[", phonemes);
+            StringAssert.DoesNotContain("(", phonemes);
+            Assert.AreEqual(MisakiSharp.TextToPhonemes("Hello,"), phonemes.Substring(0, MisakiSharp.TextToPhonemes("Hello,").Length));
+            Assert.IsTrue(phonemes.EndsWith("."), "Trailing punctuation should be preserved.");
+        }
+
+        [Test]
+        public void CustomPronunciationTokenizes()
+        {
+            var tokens = MisakiSharp.TokenizeGraphemes("[Kokoro](/kˈOkəɹO/)");
+            Assert.AreEqual(7, tokens.Length, "Every phoneme in the override should map to a vocab token.");
+        }
+
+        [Test]
+        public void StressOverride()
+        {
+            var normal = MisakiSharp.TextToPhonemes("hello");
+            var unstressed = MisakiSharp.TextToPhonemes("[hello](-2)");
+            Debug.Log($"'hello' -> '{normal}' | '[hello](-2)' -> '{unstressed}'");
+
+            StringAssert.DoesNotContain("ˈ", unstressed);
+            StringAssert.DoesNotContain("ˌ", unstressed);
+            Assert.AreEqual(normal.Replace("ˈ", "").Replace("ˌ", ""), unstressed);
+        }
+
+        [Test]
+        public void UnrecognizedAnnotationFallsBackToText()
+        {
+            Assert.AreEqual(MisakiSharp.TextToPhonemes("hello"), MisakiSharp.TextToPhonemes("[hello](foo)"));
+        }
+
+        [Test]
         public void EmptyAndNullInputHandling()
         {
             // Test empty string

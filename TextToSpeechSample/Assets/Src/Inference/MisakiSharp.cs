@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using System.Text.RegularExpressions;
 using Newtonsoft.Json;
@@ -12,6 +13,12 @@ namespace Unity.InferenceEngine.Samples.TTS.Inference
     {
         public string Text { get; init; } = "";
         public string Tag { get; init; } = "";
+
+        /// <summary>Explicit phonemes supplied via <c>[text](/phonemes/)</c>; bypasses lexicon lookup when non-null.</summary>
+        public string Phonemes { get; init; }
+
+        /// <summary>Stress override supplied via <c>[text](number)</c>, e.g. <c>[word](-1)</c>.</summary>
+        public float? Stress { get; init; }
     }
 
     public class TokenContext
@@ -135,7 +142,7 @@ namespace Unity.InferenceEngine.Samples.TTS.Inference
 
             LoadDictionaries();
 
-            var tokens = SimpleTokenize(text);
+            var tokens = TokenizeWithOverrides(text);
             var result = new List<string>();
 
             var context = new TokenContext();
@@ -151,6 +158,58 @@ namespace Unity.InferenceEngine.Samples.TTS.Inference
             }
 
             return string.Join(" ", result);
+        }
+
+        // Misaki-style inline markup: [text](/phonemes/) or [text](stress)
+        static readonly Regex k_LinkRegex = new(@"\[([^\]]+)\]\(([^\)]*)\)", RegexOptions.Compiled);
+
+        /// <summary>
+        /// Tokenizes text while honoring Misaki-style inline markup:
+        /// <list type="bullet">
+        /// <item><c>[Kokoro](/kˈOkəɹO/)</c> — use the given phonemes verbatim for the bracketed text.</item>
+        /// <item><c>[word](-1)</c> — look the word(s) up normally but apply the given stress value.</item>
+        /// </list>
+        /// Unrecognized annotations fall back to speaking the bracketed text normally.
+        /// </summary>
+        static List<MToken> TokenizeWithOverrides(string text)
+        {
+            var tokens = new List<MToken>();
+            var lastIndex = 0;
+
+            foreach (Match match in k_LinkRegex.Matches(text))
+            {
+                if (match.Index > lastIndex)
+                    tokens.AddRange(SimpleTokenize(text.Substring(lastIndex, match.Index - lastIndex)));
+
+                var displayText = match.Groups[1].Value;
+                var feature = match.Groups[2].Value.Trim();
+
+                if (feature.Length >= 2 && feature[0] == '/' && feature[^1] == '/')
+                {
+                    tokens.Add(new MToken
+                    {
+                        Text = displayText,
+                        Tag = GetSimpleTag(displayText),
+                        Phonemes = feature.Substring(1, feature.Length - 2).Trim()
+                    });
+                }
+                else if (float.TryParse(feature, NumberStyles.Float, CultureInfo.InvariantCulture, out var stress))
+                {
+                    foreach (var t in SimpleTokenize(displayText))
+                        tokens.Add(new MToken { Text = t.Text, Tag = t.Tag, Stress = t.Tag == "PUNCT" ? null : stress });
+                }
+                else
+                {
+                    tokens.AddRange(SimpleTokenize(displayText));
+                }
+
+                lastIndex = match.Index + match.Length;
+            }
+
+            if (lastIndex < text.Length)
+                tokens.AddRange(SimpleTokenize(text.Substring(lastIndex)));
+
+            return tokens;
         }
 
         static List<MToken> SimpleTokenize(string text)
@@ -271,6 +330,10 @@ namespace Unity.InferenceEngine.Samples.TTS.Inference
         {
             var word = token.Text;
 
+            // Explicit phoneme override from [text](/phonemes/) markup
+            if (token.Phonemes != null)
+                return token.Phonemes;
+
             if (string.IsNullOrEmpty(word))
                 return "";
 
@@ -296,11 +359,11 @@ namespace Unity.InferenceEngine.Samples.TTS.Inference
             var contractedPhonemes = HandleContractions(word);
             if (!string.IsNullOrEmpty(contractedPhonemes))
             {
-                return contractedPhonemes;
+                return ApplyStress(contractedPhonemes, token.Stress);
             }
 
             // Try lexicon lookup
-            var (phonemes, _) = LookupWord(word, token.Tag, null, context);
+            var (phonemes, _) = LookupWord(word, token.Tag, token.Stress, context);
             if (!string.IsNullOrEmpty(phonemes))
             {
                 return phonemes;
